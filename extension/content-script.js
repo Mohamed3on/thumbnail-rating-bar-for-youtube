@@ -105,7 +105,6 @@ const DEFAULT_USER_SETTINGS = {
   barOpacity: 100,
   barSeparator: false,
   barTooltip: true,
-  timeSincePublished: true,
 }
 let userSettings = DEFAULT_USER_SETTINGS
 
@@ -123,8 +122,6 @@ function handleMutations() {
     // Run the updates.
     updateThumbnailRatingBars()
     updateVideoRatingBarTooltips()
-    // if (userSettings.timeSincePublished)
-    //   updateTimeSincePublishedElements()
 
     hasUnseenMutations = false
 
