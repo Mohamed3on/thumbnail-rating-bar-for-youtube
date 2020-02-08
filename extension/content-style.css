@@ -715,3 +715,22 @@ ytg-thumbnail-overlay-time-status-renderer /* Gaming */
   ytg-text-badge-renderer.ytg-playlist-panel-video-renderer {
   bottom: 20px;
 }
+
+.ytrb-score-bar {
+  display: block;
+  position: absolute;
+  left: 0;
+  width: auto;
+  height: auto;
+  z-index: 999;
+  color: white;
+  font-weight: 500;
+  font-size: 13px;
+  top: 1px;
+  padding: 5px;
+  border-radius: 3px;
+  background-color: #292929;
+}
+#highest-score {
+  color: #6aff6f;
+}

@@ -9,6 +9,9 @@ let isThrottled = false
 // The YouTube API limit of the number of video IDs you can pass in per request.
 const MAX_IDS_PER_API_CALL = 50
 
+// highest score on the page
+let HIGHEST_SCORE = 0
+
 // A cache to store video ratings, to limit API calls and improve performance.
 let videoCache = {}
 
@@ -93,24 +96,6 @@ THUMBNAIL_SELECTORS[THEME_GAMING] =
 const THUMBNAIL_SELECTOR_VIDEOWALL = '' + 'a.ytp-videowall-still'
 
 // Set the current theme.
-// function setCurrentTheme() {
-//   console.log('debug')
-//   console.log($('head'))
-//   console.log($('head>meta'))
-//   console.log($('head>meta[property="og:site_name"]'))
-//   console.log($('head>meta[property="og:site_name"]').attr('content'))
-//   let siteName = $('head>meta[property="og:site_name"]').attr('content')
-//   if (siteName === 'YouTube') {
-//     curTheme = THEME_MODERN
-//   } else if (siteName === 'YouTube Gaming') {
-//     curTheme = THEME_GAMING
-//   } else {
-//     // siteName will be undefined.
-//     curTheme = THEME_CLASSIC
-//   }
-//   console.log('set theme', siteName, curTheme)
-//   curTheme = 1
-// }
 
 // The default user settings. `userSettings` is replaced with the stored user's
 // settings once they are loaded.
@@ -334,17 +319,41 @@ function addRatingBars(thumbnails_and_ids) {
     let thumbnail = thumbnail_and_id[0]
     let id = thumbnail_and_id[1]
     if (id in videoCache) {
-      $(thumbnail).prepend(getRatingBarHtml(videoCache[id]))
+      const video = videoCache[id]
+      $(thumbnail).prepend(getRatingBarHtml(video))
+      $(thumbnail).prepend(getRatingScoreHtml({ score: video.score }))
     } else {
       if (debug) console.log('missing id', id, thumbnail)
     }
   }
 }
 
+const getRatingScoreHtml = ({ score }) => {
+  let isHighestScore = false
+  const watchMeText = ' - Watch Me!'
+
+  if (score > HIGHEST_SCORE) {
+    HIGHEST_SCORE = score
+    const previousHighestScore = document.getElementById('highest-score')
+    if (previousHighestScore) {
+      previousHighestScore.removeAttribute('id')
+      previousHighestScore.textContent = previousHighestScore.textContent.replace(
+        watchMeText,
+        ''
+      )
+    }
+    isHighestScore = true
+  }
+  return `<div class='ytrb-score-bar' id=${
+    isHighestScore ? 'highest-score' : ''
+  }>${score}${isHighestScore ? watchMeText : ''}</div>`
+}
+
 function getVideoObject(likes, dislikes) {
   likes = parseInt(likes)
   dislikes = parseInt(dislikes)
   let total = likes + dislikes
+  const score = likes - dislikes
   let ratingStyle = ''
   let ratingText = ''
   if (total) {
@@ -360,8 +369,9 @@ function getVideoObject(likes, dislikes) {
     likes: likes.toLocaleString(),
     dislikes: dislikes.toLocaleString(),
     total: total.toLocaleString(),
-    ratingStyle: ratingStyle,
-    ratingText: ratingText,
+    ratingStyle,
+    ratingText,
+    score,
   }
 }
 
@@ -478,23 +488,6 @@ function updateVideoRatingBarTooltips() {
     })
   }
 }
-
-// function updateTimeSincePublishedElements() {
-//   // For modern theme.
-//   if (curTheme === THEME_MODERN || !curTheme) {
-//     $('#upload-info .date:not([data-ytrb-found])')
-//       .each(function (_, dateSpan) {
-//         let dateText = $(dateSpan).text().substring(13)
-//         // let prevDateText = $(dateSpan).attr('data-ytrb-found')
-//
-//         $(dateSpan).attr('data-ytrb-found', dateText)
-//
-//         let dateFromNow = moment(dateText).fromNow()
-//         console.log(dateText, dateFromNow, dateSpan)
-//         $(dateSpan).append('<span class="ytrb-time-since">' + dateFromNow + '</span>')
-//       })
-//   }
-// }
 
 chrome.storage.sync.get(DEFAULT_USER_SETTINGS, function(stored_settings) {
   if (stored_settings) {
