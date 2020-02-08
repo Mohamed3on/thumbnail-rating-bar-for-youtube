@@ -716,7 +716,7 @@ ytg-thumbnail-overlay-time-status-renderer /* Gaming */
   bottom: 20px;
 }
 
-.ytrb-score-bar {
+ytrb-score-bar {
   display: block;
   position: absolute;
   left: 0;

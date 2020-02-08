@@ -228,6 +228,12 @@ function updateThumbnailRatingBars() {
         $(thumbnail)
           .children('ytrb-bar')
           .remove()
+
+        $(thumbnail)
+          .children('ytrb-score-bar')
+          .remove()
+
+        HIGHEST_SCORE = 0
       }
     }
     // Add an attribute that marks this thumbnail as found, and give it the
@@ -344,9 +350,9 @@ const getRatingScoreHtml = ({ score }) => {
     }
     isHighestScore = true
   }
-  return `<div class='ytrb-score-bar' id=${
-    isHighestScore ? 'highest-score' : ''
-  }>${score}${isHighestScore ? watchMeText : ''}</div>`
+  return `<ytrb-score-bar id=${isHighestScore ? 'highest-score' : ''}>${score}${
+    isHighestScore ? watchMeText : ''
+  }</ytrb-score-bar>`
 }
 
 function getVideoObject(likes, dislikes) {
