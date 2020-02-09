@@ -347,7 +347,9 @@ const getRatingScoreHtml = ({ score }) => {
     }
     isHighestScore = true
   }
-  return `<ytrb-score-bar id=${isHighestScore ? 'highest-score' : ''}>${score}${
+  return `<ytrb-score-bar id=${
+    isHighestScore ? 'highest-score' : ''
+  }>${score.toLocaleString()}${
     isHighestScore ? watchMeText : ''
   }</ytrb-score-bar>`
 }
