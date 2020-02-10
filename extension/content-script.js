@@ -1,6 +1,8 @@
 // Setting debug to true will turn on console.log messages used for debugging.
 let debug = false
 
+let pageURL = document.location.href
+
 // Variables for handling throttling DOM searches.
 const THROTTLE_MS = 100
 let hasUnseenMutations = false
@@ -125,6 +127,10 @@ function handleMutations() {
 
     hasUnseenMutations = false
 
+    if (pageURL != document.location.href) {
+      pageURL = document.location.href
+      HIGHEST_SCORE = 0
+    }
     // Turn on throttle.
     isThrottled = true
 
@@ -229,8 +235,6 @@ function updateThumbnailRatingBars() {
         $(thumbnail)
           .children('ytrb-score-bar')
           .remove()
-
-        HIGHEST_SCORE = 0
       }
     }
     // Add an attribute that marks this thumbnail as found, and give it the
