@@ -4,7 +4,7 @@ let debug = false
 let pageURL = document.location.href
 
 // Variables for handling throttling DOM searches.
-const THROTTLE_MS = 100
+const THROTTLE_MS = 3000
 let hasUnseenMutations = false
 let isThrottled = false
 
@@ -328,18 +328,23 @@ function addRatingBars(thumbnails_and_ids) {
     if (id in videoCache) {
       const video = videoCache[id]
       $(thumbnail).prepend(getRatingBarHtml(video))
-      $(thumbnail).prepend(getRatingScoreHtml({ score: video.score }))
+      $(thumbnail).prepend(
+        getRatingScoreHtml({ score: video.score, thumbnail })
+      )
     } else {
       if (debug) console.log('missing id', id, thumbnail)
     }
   }
 }
 
-const getRatingScoreHtml = ({ score }) => {
+const isVideoWatched = thumbnail => thumbnail.querySelector('#progress')
+
+const getRatingScoreHtml = ({ score, thumbnail }) => {
   let isHighestScore = false
   const watchMeText = ' - Watch Me!'
+  const videoIsWatched = isVideoWatched(thumbnail)
 
-  if (score > HIGHEST_SCORE) {
+  if (score > HIGHEST_SCORE && !videoIsWatched) {
     HIGHEST_SCORE = score
     const previousHighestScore = document.getElementById('highest-score')
     if (previousHighestScore) {
