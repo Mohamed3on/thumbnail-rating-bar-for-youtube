@@ -1,28 +1,28 @@
 // Setting debug to true will turn on console.log messages used for debugging.
-let debug = false
+let debug = false;
 
-let pageURL = document.location.href
+let pageURL = document.location.href;
 
 // Variables for handling throttling DOM searches.
-const THROTTLE_MS = 3000
-let hasUnseenMutations = false
-let isThrottled = false
+const THROTTLE_MS = 3000;
+let hasUnseenMutations = false;
+let isThrottled = false;
 
 // The YouTube API limit of the number of video IDs you can pass in per request.
-const MAX_IDS_PER_API_CALL = 50
+const MAX_IDS_PER_API_CALL = 50;
 
 // highest score on the page
-let HIGHEST_SCORE = 0
+let HIGHEST_SCORE = 0;
 
 // A cache to store video ratings, to limit API calls and improve performance.
-let videoCache = {}
+let videoCache = {};
 
 // Enum values for which YouTube theme is currently begin viewed.
-let curTheme = 0 // No theme set yet.
-const THEME_MODERN = 1 // The new Material Design theme.
-const THEME_CLASSIC = 2 // The classic theme.
-const THEME_GAMING = 3 // The YouTube Gaming theme.
-const NUM_THEMES = 3
+let curTheme = 0; // No theme set yet.
+const THEME_MODERN = 1; // The new Material Design theme.
+const THEME_CLASSIC = 2; // The classic theme.
+const THEME_GAMING = 3; // The YouTube Gaming theme.
+const NUM_THEMES = 3;
 
 // We use these JQuery selectors to find new thumbnails on the page. We use
 // :not([data-ytrb-found]) to make sure these aren't thumbnails that we've
@@ -53,11 +53,11 @@ const NUM_THEMES = 3
 // Listed below are which type of thumbnails that part of selector identifies,
 // and where the link tag element is relative to the thumbnail element for
 // figuring out the video ID associated with that thumbnail.
-const THUMBNAIL_SELECTORS = []
+const THUMBNAIL_SELECTORS = [];
 THUMBNAIL_SELECTORS[THEME_MODERN] =
   '' +
   // All types except the video wall. The URL is on the selected a link.
-  'a#thumbnail'
+  'a#thumbnail';
 
 THUMBNAIL_SELECTORS[THEME_CLASSIC] =
   '' +
@@ -80,7 +80,7 @@ THUMBNAIL_SELECTORS[THEME_CLASSIC] =
   // Sidebar suggested video. (url on first child)
   '.thumb-wrapper, ' +
   // Playlist page big thumbnail. (url on second child)
-  '.pl-header-thumb'
+  '.pl-header-thumb';
 
 THUMBNAIL_SELECTORS[THEME_GAMING] =
   '' +
@@ -92,10 +92,10 @@ THUMBNAIL_SELECTORS[THEME_GAMING] =
   ':not(.ytg-user-avatar)' +
   ':not(.ytg-box-art)' +
   ':not(.ytg-compact-gaming-event-renderer)' +
-  ':not(.ytg-playlist-header-renderer)'
+  ':not(.ytg-playlist-header-renderer)';
 
 // All themes use this selector for video wall videos.
-const THUMBNAIL_SELECTOR_VIDEOWALL = '' + 'a.ytp-videowall-still'
+const THUMBNAIL_SELECTOR_VIDEOWALL = '' + 'a.ytp-videowall-still';
 
 // Set the current theme.
 
@@ -107,11 +107,11 @@ const DEFAULT_USER_SETTINGS = {
   barOpacity: 100,
   barSeparator: false,
   barTooltip: true,
-}
-let userSettings = DEFAULT_USER_SETTINGS
+};
+let userSettings = DEFAULT_USER_SETTINGS;
 
 // An observer for watching changes to the body element.
-let observer = new MutationObserver(handleMutations)
+let observer = new MutationObserver(handleMutations);
 
 function handleMutations() {
   // When the DOM is updated, we search for items that should be modified.
@@ -119,57 +119,57 @@ function handleMutations() {
   if (isThrottled) {
     // If updates are currently being throttled, we'll remember to handle
     // them later.
-    hasUnseenMutations = true
+    hasUnseenMutations = true;
   } else {
     // Run the updates.
-    updateThumbnailRatingBars()
-    updateVideoRatingBarTooltips()
+    updateThumbnailRatingBars();
+    updateVideoRatingBarTooltips();
 
-    hasUnseenMutations = false
+    hasUnseenMutations = false;
 
     if (pageURL != document.location.href) {
-      pageURL = document.location.href
-      HIGHEST_SCORE = 0
+      pageURL = document.location.href;
+      HIGHEST_SCORE = 0;
     }
     // Turn on throttle.
-    isThrottled = true
+    isThrottled = true;
 
     setTimeout(function() {
       // After `THROTTLE_MS` milliseconds, turn off the throttle.
-      isThrottled = false
+      isThrottled = false;
 
       // If any mutations occurred while being throttled, handle them now.
       if (hasUnseenMutations) {
-        handleMutations()
+        handleMutations();
       }
-    }, THROTTLE_MS)
+    }, THROTTLE_MS);
   }
 }
 
 function updateThumbnailRatingBars() {
   // Get new thumbnails, and set the theme if it hasn't been set yet.
-  let thumbnails = []
+  let thumbnails = [];
   if (curTheme) {
-    thumbnails = $(THUMBNAIL_SELECTORS[curTheme])
+    thumbnails = $(THUMBNAIL_SELECTORS[curTheme]);
   } else {
     for (let i = 1; i <= NUM_THEMES; i++) {
-      thumbnails = $(THUMBNAIL_SELECTORS[i])
+      thumbnails = $(THUMBNAIL_SELECTORS[i]);
       if (thumbnails.length) {
-        curTheme = i
+        curTheme = i;
       }
     }
   }
 
   // Add the videowall thumbnails.
-  thumbnails = $.merge(thumbnails, $(THUMBNAIL_SELECTOR_VIDEOWALL))
+  thumbnails = $.merge(thumbnails, $(THUMBNAIL_SELECTOR_VIDEOWALL));
 
-  let thumbnails_and_ids = []
+  let thumbnails_and_ids = [];
   $(thumbnails).each(function(_, thumbnail) {
     // Find the link tag element of the thumbnail and its URL.
-    let url
+    let url;
     if (curTheme === THEME_MODERN) {
       // The URL should be on the current element.
-      url = $(thumbnail).attr('href')
+      url = $(thumbnail).attr('href');
     } else if (curTheme === THEME_CLASSIC) {
       // Check the current element, then the parent, then the grandparent,
       // then the first child, then the second child.
@@ -188,7 +188,7 @@ function updateThumbnailRatingBars() {
         $(thumbnail)
           .children(':first')
           .next()
-          .attr('href')
+          .attr('href');
     } else if (curTheme === THEME_GAMING) {
       // Check the current element, then the grandparent.
       url =
@@ -201,78 +201,78 @@ function updateThumbnailRatingBars() {
           .parent()
           .parent()
           .parent()
-          .attr('href')
+          .attr('href');
 
       // Unless the element is a video wall thumbnail, change the thumbnail
       // element to the parent element, so that it will show over the thumbnail
       // preview video that plays when you hover over the thumbnail.
       if (!$(thumbnail).is('a')) {
-        thumbnail = $(thumbnail).parent()
+        thumbnail = $(thumbnail).parent();
       }
     } else {
       // The theme may not be set if only videowall thumbnails were found.
-      url = $(thumbnail).attr('href')
+      url = $(thumbnail).attr('href');
     }
 
     if (!url) {
-      if (debug) console.log('url not found', thumbnail, url)
-      return true
+      if (debug) console.log('url not found', thumbnail, url);
+      return true;
     }
 
     // Check if this thumbnail was previously found.
-    let previousUrl = $(thumbnail).attr('data-ytrb-found')
+    let previousUrl = $(thumbnail).attr('data-ytrb-found');
     if (previousUrl) {
       // Check if this thumbnail is for the same URL as previously.
       if (previousUrl === url) {
         // If so, continue the next thumbnail.
-        return true
+        return true;
       } else {
         // If not, remove the old rating bar.
         $(thumbnail)
           .children('ytrb-bar')
-          .remove()
+          .remove();
 
         $(thumbnail)
           .children('ytrb-score-bar')
-          .remove()
+          .remove();
       }
     }
     // Add an attribute that marks this thumbnail as found, and give it the
     // value of the URL the thumbnail is for.
-    $(thumbnail).attr('data-ytrb-found', url)
+    $(thumbnail).attr('data-ytrb-found', url);
 
     // Extract the video ID from the URL.
-    let match = url.match(/.*[?&]v=([^&]+).*/)
+    let match = url.match(/.*[?&]v=([^&]+).*/);
     if (match) {
-      let id = match[1]
-      thumbnails_and_ids.push([thumbnail, id])
+      let id = match[1];
+      thumbnails_and_ids.push([thumbnail, id]);
     } else {
-      if (debug) console.log('match not found', thumbnail, url)
+      if (debug) console.log('match not found', thumbnail, url);
     }
-  })
+  });
 
   if (thumbnails_and_ids.length) {
     addRatingsToCache(thumbnails_and_ids).then(function() {
-      addRatingBars(thumbnails_and_ids)
-    })
+      addRatingBars(thumbnails_and_ids);
+    });
   }
 }
 
 function addRatingsToCache(thumbnails_and_ids) {
   // Get the set of all IDs we haven't seen yet.
-  let unseenIds = new Set()
+  let unseenIds = new Set();
   for (let thumbnail_and_id of thumbnails_and_ids) {
-    let id = thumbnail_and_id[1]
+    let id = thumbnail_and_id[1];
     if (!(id in videoCache)) {
-      unseenIds.add(id)
+      unseenIds.add(id);
     }
   }
 
   // Go through the unseen IDs in batches of 50 and get their ratings.
-  let unseenIdsArray = Array.from(unseenIds)
-  let promises = []
+  let unseenIdsArray = Array.from(unseenIds);
+  let promises = [];
   for (let i = 0; i < unseenIdsArray.length; i += MAX_IDS_PER_API_CALL) {
-    let unseenIdsBatch = unseenIdsArray.slice(i, i + MAX_IDS_PER_API_CALL)
+    let unseenIdsBatch = unseenIdsArray.slice(i, i + MAX_IDS_PER_API_CALL);
 
     let promise = new Promise((resolve, reject) => {
       chrome.runtime.sendMessage(
@@ -285,8 +285,8 @@ function addRatingsToCache(thumbnails_and_ids) {
                 'YouTube Data API key. To resolve this issue, visit the ' +
                 "extension's settings page, which is accessible by " +
                 "clicking the extension's icon in the toolbar."
-            )
-            resolve()
+            );
+            resolve();
           } else if (data && data.error) {
             console.error(
               '[YouTube Data API Error] The "Thumbnail Rating ' +
@@ -296,87 +296,77 @@ function addRatingsToCache(thumbnails_and_ids) {
                 "key, visit the extension's settings page, which is " +
                 "accessible by clicking the extension's icon in the " +
                 'toolbar.'
-            )
-            resolve()
+            );
+            resolve();
           } else {
             for (let item of data.items) {
-              let video = getVideoObject(
-                item.statistics.likeCount || 0,
-                item.statistics.dislikeCount || 0
-              )
-              videoCache[item.id] = video
-              resolve()
+              let video = getVideoObject(item.statistics.likeCount, item.statistics.dislikeCount);
+              videoCache[item.id] = video;
+              resolve();
             }
           }
         }
-      )
-    })
+      );
+    });
 
-    promises.push(promise)
+    promises.push(promise);
   }
 
   // Return a promise that resolves once all data has been retrieved and saved
   // to the cache.
-  return Promise.all(promises)
+  return Promise.all(promises);
 }
 
 function addRatingBars(thumbnails_and_ids) {
   // Add a rating bar to each thumbnail.
   for (let thumbnail_and_id of thumbnails_and_ids) {
-    let thumbnail = thumbnail_and_id[0]
-    let id = thumbnail_and_id[1]
+    let thumbnail = thumbnail_and_id[0];
+    let id = thumbnail_and_id[1];
     if (id in videoCache) {
-      const video = videoCache[id]
-      $(thumbnail).prepend(getRatingBarHtml(video))
-      $(thumbnail).prepend(
-        getRatingScoreHtml({ score: video.score, thumbnail })
-      )
+      const video = videoCache[id];
+      $(thumbnail).prepend(getRatingBarHtml(video));
+      $(thumbnail).prepend(getRatingScoreHtml({ score: video.score, thumbnail }));
     } else {
-      if (debug) console.log('missing id', id, thumbnail)
+      if (debug) console.log('missing id', id, thumbnail);
     }
   }
 }
 
-const isVideoWatched = thumbnail => thumbnail.querySelector('#progress')
+const isVideoWatched = (thumbnail) => thumbnail.querySelector('#progress');
 
 const getRatingScoreHtml = ({ score, thumbnail }) => {
-  let isHighestScore = false
-  const watchMeText = ' - Watch Me!'
-  const videoIsWatched = isVideoWatched(thumbnail)
+  let isHighestScore = false;
+  const watchMeText = ' - Pick me!';
+  const videoIsWatched = isVideoWatched(thumbnail);
 
   if (score > HIGHEST_SCORE && !videoIsWatched) {
-    HIGHEST_SCORE = score
-    const previousHighestScore = document.getElementById('highest-score')
+    HIGHEST_SCORE = score;
+    const previousHighestScore = document.getElementById('highest-score');
     if (previousHighestScore) {
-      previousHighestScore.removeAttribute('id')
-      previousHighestScore.textContent = previousHighestScore.textContent.replace(
-        watchMeText,
-        ''
-      )
+      previousHighestScore.removeAttribute('id');
+      previousHighestScore.textContent = previousHighestScore.textContent.replace(watchMeText, '');
     }
-    isHighestScore = true
+    isHighestScore = true;
   }
-  return `<ytrb-score-bar id=${
-    isHighestScore ? 'highest-score' : ''
-  }>${score.toLocaleString()}${
+  return `<ytrb-score-bar id=${isHighestScore ? 'highest-score' : ''}>${score.toLocaleString()}${
     isHighestScore ? watchMeText : ''
-  }</ytrb-score-bar>`
-}
+  } ${videoIsWatched && score > HIGHEST_SCORE ? '- avoid!' : ''}</ytrb-score-bar>`;
+};
 
 function getVideoObject(likes, dislikes) {
-  likes = parseInt(likes)
-  dislikes = parseInt(dislikes)
-  let total = likes + dislikes
-  const score = likes - dislikes
-  let ratingStyle = ''
-  let ratingText = ''
+  likes = parseInt(likes);
+  dislikes = parseInt(dislikes);
+  let total = likes + dislikes;
+  const score = likes - dislikes;
+  let ratingStyle = '';
+  let ratingText = '';
   if (total) {
-    let rating = (likes / total) * 100
-    ratingStyle = rating + '%'
+    let rating = (likes / total) * 100;
+    ratingStyle = rating + '%';
     if (likes !== total && rating >= 99.95) {
-      ratingText = '>99.9%'
+      ratingText = '>99.9%';
     } else {
-      ratingText = rating.toFixed(1) + '%'
+      ratingText = rating.toFixed(1) + '%';
     }
   }
   return {
@@ -386,7 +376,7 @@ function getVideoObject(likes, dislikes) {
     ratingStyle,
     ratingText,
     score,
-  }
+  };
 }
 
 function getRatingBarHtml(video) {
@@ -396,16 +386,13 @@ function getRatingBarHtml(video) {
       ? ' style="opacity:' + userSettings.barOpacity / 100 + '"'
       : '') +
     (video.ratingStyle
-      ? '>' +
-        '<ytrb-rating style="width:' +
-        video.ratingStyle +
-        '"></ytrb-rating>'
+      ? '>' + '<ytrb-rating style="width:' + video.ratingStyle + '"></ytrb-rating>'
       : ' class="ytrb-bar-no-rating">') +
     (userSettings.barTooltip
       ? '<ytrb-tooltip><div>' + getToolTipText(video) + '</div></ytrb-tooltip>'
       : '') +
     '</ytrb-bar>'
-  )
+  );
 }
 
 function getToolTipText(video) {
@@ -418,46 +405,46 @@ function getToolTipText(video) {
     ' &nbsp;&nbsp; ' +
     video.total +
     '&nbsp;total'
-  )
+  );
 }
 
 function updateVideoRatingBarTooltips() {
   // For modern theme.
   if (curTheme === THEME_MODERN || !curTheme) {
     $('.ytd-sentiment-bar-renderer #tooltip').each(function(_, tooltip) {
-      let text
+      let text;
       try {
         text = $(tooltip)
           .text()
-          .split('  ')[3]
+          .split('  ')[3];
         // If the tooltip is empty, continue.
         if (text.length < 3) {
-          return true
+          return true;
         }
       } catch (e) {
-        if (debug) console.log('tooltip likes not found', tooltip)
-        return true
+        if (debug) console.log('tooltip likes not found', tooltip);
+        return true;
       }
-      let previousText = $(tooltip).attr('data-ytrb-found')
+      let previousText = $(tooltip).attr('data-ytrb-found');
       if (previousText) {
         if (previousText === text) {
           // This tooltip has already been processed.
-          return true
+          return true;
         }
         $(tooltip)
           .children('span')
-          .remove()
+          .remove();
       }
 
       // Mark this tooltip as found, and remember the text it is for.
-      $(tooltip).attr('data-ytrb-found', text)
+      $(tooltip).attr('data-ytrb-found', text);
 
       // Extract the likes and dislikes from the tooltip's text.
-      let match = text.match(/([0-9,]+) \/ ([0-9,]+)/)
+      let match = text.match(/([0-9,]+) \/ ([0-9,]+)/);
       if (match) {
-        let likes = match[1].replace(/\D/g, '')
-        let dislikes = match[2].replace(/\D/g, '')
-        let video = getVideoObject(likes, dislikes)
+        let likes = match[1].replace(/\D/g, '');
+        let dislikes = match[2].replace(/\D/g, '');
+        let video = getVideoObject(likes, dislikes);
         if (video.ratingStyle) {
           $(tooltip).append(
             '<span> &nbsp;&nbsp; ' +
@@ -465,57 +452,49 @@ function updateVideoRatingBarTooltips() {
               ' &nbsp;&nbsp; ' +
               video.total +
               '&nbsp;total</span>'
-          )
+          );
         } else {
-          $(tooltip).append('<span> &nbsp;&nbsp; No ratings yet.</span>')
+          $(tooltip).append('<span> &nbsp;&nbsp; No ratings yet.</span>');
         }
       } else {
-        if (debug)
-          console.log('tooltip match not found', text, tooltip, $(tooltip))
+        if (debug) console.log('tooltip match not found', text, tooltip, $(tooltip));
       }
-    })
+    });
   }
 
   // For classic theme.
   if (curTheme === THEME_CLASSIC || !curTheme) {
-    $('#watch8-sentiment-actions:not([data-ytrb-found])').each(function(
-      _,
-      tooltip
-    ) {
-      $(tooltip).attr('data-ytrb-found', '')
+    $('#watch8-sentiment-actions:not([data-ytrb-found])').each(function(_, tooltip) {
+      $(tooltip).attr('data-ytrb-found', '');
       let likes = $(tooltip)
         .find('.like-button-renderer-like-button:first>span')
         .text()
-        .replace(/\D/g, '')
+        .replace(/\D/g, '');
       let dislikes = $(tooltip)
         .find('.like-button-renderer-dislike-button:first>span')
         .text()
-        .replace(/\D/g, '')
-      let video = getVideoObject(likes, dislikes)
+        .replace(/\D/g, '');
+      let video = getVideoObject(likes, dislikes);
       $(tooltip)
         .find('.video-extras-sparkbars')
-        .append(
-          '<ytrb-classic-tooltip>' +
-            getToolTipText(video) +
-            '</ytrb-classic-tooltip>'
-        )
-    })
+        .append('<ytrb-classic-tooltip>' + getToolTipText(video) + '</ytrb-classic-tooltip>');
+    });
   }
 }
 
 chrome.storage.sync.get(DEFAULT_USER_SETTINGS, function(stored_settings) {
   if (stored_settings) {
-    userSettings = stored_settings
+    userSettings = stored_settings;
   }
   if (userSettings.barColor !== 'blue-gray') {
-    $('html').addClass('ytrb-bar-color-' + userSettings.barColor)
+    $('html').addClass('ytrb-bar-color-' + userSettings.barColor);
   }
   if (userSettings.barThickness !== 4) {
-    $('html').addClass('ytrb-bar-thickness-' + userSettings.barThickness)
+    $('html').addClass('ytrb-bar-thickness-' + userSettings.barThickness);
   }
   if (userSettings.barSeparator) {
-    $('html').addClass('ytrb-bar-separator')
+    $('html').addClass('ytrb-bar-separator');
   }
-  handleMutations()
-  observer.observe(document.body, { childList: true, subtree: true })
-})
+  handleMutations();
+  observer.observe(document.body, { childList: true, subtree: true });
+});
