@@ -348,9 +348,10 @@ const getRatingScoreHtml = ({ score, thumbnail }) => {
     }
     isHighestScore = true;
   }
-  return `<ytrb-score-bar id=${isHighestScore ? 'highest-score' : ''}>${score.toLocaleString()}${
+  const id = isHighestScore ? 'highest-score' : videoIsWatched ? 'watched' : '';
+  return `<ytrb-score-bar id=${id}>${score.toLocaleString()}${
     isHighestScore ? watchMeText : ''
-  } ${videoIsWatched && score > HIGHEST_SCORE ? '- avoid!' : ''}</ytrb-score-bar>`;
+  }</ytrb-score-bar>`;
 };
 
 function getVideoObject(likes, dislikes) {
