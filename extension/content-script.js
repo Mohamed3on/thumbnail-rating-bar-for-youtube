@@ -4,7 +4,7 @@ let debug = false;
 let pageURL = document.location.href;
 
 // Variables for handling throttling DOM searches.
-const THROTTLE_MS = 3000;
+const THROTTLE_MS = 1000;
 let hasUnseenMutations = false;
 let isThrottled = false;
 
@@ -114,6 +114,9 @@ let userSettings = DEFAULT_USER_SETTINGS;
 let observer = new MutationObserver(handleMutations);
 
 function handleMutations() {
+  // if the page is not fully loaded, wait
+  if (!document.body.querySelectorAll('ytd-thumbnail-overlay-time-status-renderer').length) return;
+
   // When the DOM is updated, we search for items that should be modified.
   // However, we throttle these searches to not over tax the CPU.
   if (isThrottled) {
@@ -134,7 +137,7 @@ function handleMutations() {
     // Turn on throttle.
     isThrottled = true;
 
-    setTimeout(function() {
+    setTimeout(function () {
       // After `THROTTLE_MS` milliseconds, turn off the throttle.
       isThrottled = false;
 
@@ -164,7 +167,7 @@ function updateThumbnailRatingBars() {
   thumbnails = $.merge(thumbnails, $(THUMBNAIL_SELECTOR_VIDEOWALL));
 
   let thumbnails_and_ids = [];
-  $(thumbnails).each(function(_, thumbnail) {
+  $(thumbnails).each(function (_, thumbnail) {
     // Find the link tag element of the thumbnail and its URL.
     let url;
     if (curTheme === THEME_MODERN) {
@@ -175,33 +178,16 @@ function updateThumbnailRatingBars() {
       // then the first child, then the second child.
       url =
         $(thumbnail).attr('href') ||
-        $(thumbnail)
-          .parent()
-          .attr('href') ||
-        $(thumbnail)
-          .parent()
-          .parent()
-          .attr('href') ||
-        $(thumbnail)
-          .children(':first')
-          .attr('href') ||
-        $(thumbnail)
-          .children(':first')
-          .next()
-          .attr('href');
+        $(thumbnail).parent().attr('href') ||
+        $(thumbnail).parent().parent().attr('href') ||
+        $(thumbnail).children(':first').attr('href') ||
+        $(thumbnail).children(':first').next().attr('href');
     } else if (curTheme === THEME_GAMING) {
       // Check the current element, then the grandparent.
       url =
         $(thumbnail).attr('href') ||
-        $(thumbnail)
-          .parent()
-          .parent()
-          .attr('href') ||
-        $(thumbnail)
-          .parent()
-          .parent()
-          .parent()
-          .attr('href');
+        $(thumbnail).parent().parent().attr('href') ||
+        $(thumbnail).parent().parent().parent().attr('href');
 
       // Unless the element is a video wall thumbnail, change the thumbnail
       // element to the parent element, so that it will show over the thumbnail
@@ -228,13 +214,9 @@ function updateThumbnailRatingBars() {
         return true;
       } else {
         // If not, remove the old rating bar.
-        $(thumbnail)
-          .children('ytrb-bar')
-          .remove();
+        $(thumbnail).children('ytrb-bar').remove();
 
-        $(thumbnail)
-          .children('ytrb-score-bar')
-          .remove();
+        $(thumbnail).children('ytrb-score-bar').remove();
       }
     }
     // Add an attribute that marks this thumbnail as found, and give it the
@@ -252,7 +234,7 @@ function updateThumbnailRatingBars() {
   });
 
   if (thumbnails_and_ids.length) {
-    addRatingsToCache(thumbnails_and_ids).then(function() {
+    addRatingsToCache(thumbnails_and_ids).then(function () {
       addRatingBars(thumbnails_and_ids);
     });
   }
@@ -277,7 +259,7 @@ function addRatingsToCache(thumbnails_and_ids) {
     let promise = new Promise((resolve, reject) => {
       chrome.runtime.sendMessage(
         { contentScriptQuery: 'videoStatistics', videoIds: unseenIdsBatch },
-        function(data) {
+        function (data) {
           if (typeof data === 'undefined') {
             console.error(
               '[Missing Requirement] The "Thumbnail Rating ' +
@@ -412,12 +394,10 @@ function getToolTipText(video) {
 function updateVideoRatingBarTooltips() {
   // For modern theme.
   if (curTheme === THEME_MODERN || !curTheme) {
-    $('.ytd-sentiment-bar-renderer #tooltip').each(function(_, tooltip) {
+    $('.ytd-sentiment-bar-renderer #tooltip').each(function (_, tooltip) {
       let text;
       try {
-        text = $(tooltip)
-          .text()
-          .split('  ')[3];
+        text = $(tooltip).text().split('  ')[3];
         // If the tooltip is empty, continue.
         if (text.length < 3) {
           return true;
@@ -432,9 +412,7 @@ function updateVideoRatingBarTooltips() {
           // This tooltip has already been processed.
           return true;
         }
-        $(tooltip)
-          .children('span')
-          .remove();
+        $(tooltip).children('span').remove();
       }
 
       // Mark this tooltip as found, and remember the text it is for.
@@ -465,7 +443,7 @@ function updateVideoRatingBarTooltips() {
 
   // For classic theme.
   if (curTheme === THEME_CLASSIC || !curTheme) {
-    $('#watch8-sentiment-actions:not([data-ytrb-found])').each(function(_, tooltip) {
+    $('#watch8-sentiment-actions:not([data-ytrb-found])').each(function (_, tooltip) {
       $(tooltip).attr('data-ytrb-found', '');
       let likes = $(tooltip)
         .find('.like-button-renderer-like-button:first>span')
@@ -483,7 +461,7 @@ function updateVideoRatingBarTooltips() {
   }
 }
 
-chrome.storage.sync.get(DEFAULT_USER_SETTINGS, function(stored_settings) {
+chrome.storage.sync.get(DEFAULT_USER_SETTINGS, function (stored_settings) {
   if (stored_settings) {
     userSettings = stored_settings;
   }
