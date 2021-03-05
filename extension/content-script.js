@@ -117,6 +117,9 @@ function handleMutations() {
   // if the page is not fully loaded, wait
   if (!document.body.querySelectorAll('ytd-thumbnail-overlay-time-status-renderer').length) return;
 
+  // TODO: if the above length does not match the thumbnails length, return
+  // and wait
+
   // When the DOM is updated, we search for items that should be modified.
   // However, we throttle these searches to not over tax the CPU.
   if (isThrottled) {
@@ -165,6 +168,10 @@ function updateThumbnailRatingBars() {
 
   // Add the videowall thumbnails.
   thumbnails = $.merge(thumbnails, $(THUMBNAIL_SELECTOR_VIDEOWALL));
+  console.log(
+    '🚀 ~ file: content-script.js ~ line 168 ~ updateThumbnailRatingBars ~ thumbnails',
+    thumbnails
+  );
 
   let thumbnails_and_ids = [];
   $(thumbnails).each(function (_, thumbnail) {
@@ -330,7 +337,11 @@ const getRatingScoreHtml = ({ score, thumbnail }) => {
     }
     isHighestScore = true;
   }
-  const id = isHighestScore ? 'highest-score' : videoIsWatched ? 'watched' : '';
+  const id = isHighestScore
+    ? 'highest-score'
+    : videoIsWatched && score > HIGHEST_SCORE
+    ? 'watched'
+    : '';
   return `<ytrb-score-bar id=${id}>${score.toLocaleString()}${
     isHighestScore ? watchMeText : ''
   }</ytrb-score-bar>`;
