@@ -502,7 +502,10 @@ function processNewThumbnails() {
   }
 
   // sort videos on search pages by the highest scores
-  if (pageURL.includes('search')) sortThumbnails();
+  if (pageURL.includes('search')) {
+    THROTTLE_MS = 1000;
+    sortThumbnails();
+  }
 }
 
 function getVideoDataFromTooltipText(text) {
