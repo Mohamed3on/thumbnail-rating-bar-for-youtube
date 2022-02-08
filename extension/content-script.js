@@ -98,6 +98,9 @@ const NON_DIGITS_OR_FORWARDSLASH_REGEX = /[^\d/]/g;
 // highest score on the page
 let HIGHEST_SCORE = 0;
 
+// score algorithm
+const getScore = ({ likes, dislikes, rating }) => (likes - dislikes) * rating;
+
 let pageURL = document.location.href;
 
 // The default user settings. `userSettings` is replaced with the stored user's
@@ -338,7 +341,7 @@ function getVideoDataObject(likes, dislikes) {
     dislikes: dislikes,
     total: total,
     rating: rating,
-    score: likes - dislikes,
+    score: Math.round(getScore({ likes, dislikes, rating }), 2),
   };
 }
 
