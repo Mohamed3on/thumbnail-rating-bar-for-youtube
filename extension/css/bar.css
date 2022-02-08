@@ -49,7 +49,8 @@ ytg-thumbnail .ytrb-bar {
 }
 
 /* For YouTube mobile. Keeps the rating bar contained in the thumbnail. */
-ytm-app a.media-item-thumbnail-container, ytm-app a.compact-media-item-image {
+ytm-app a.media-item-thumbnail-container,
+ytm-app a.compact-media-item-image {
   position: relative;
 }
 
@@ -63,4 +64,24 @@ ytm-media-item ytrb-bar {
   margin-left: -12px;
   margin-right: -12px;
   width: calc(100% + 24px);
+}
+
+ytrb-score-bar {
+  display: block;
+  position: absolute;
+  left: 0;
+  width: auto;
+  height: auto;
+  z-index: 999;
+  color: white;
+  font-weight: 500;
+  font-size: 13px;
+  top: 1px;
+  padding: 5px;
+  border-radius: 3px;
+  background-color: #292929;
+}
+#highest-score {
+  color: #6aff6f;
+  font-size: 15px;
 }
