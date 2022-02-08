@@ -9,6 +9,12 @@ const MAX_RETRIES_PER_THUMBNAIL = 10;
 let isPendingApiRetry = false;
 let thumbnailsToRetry = [];
 
+let allThumbnails = [];
+
+let numberOfThumbnailProcessed = 0;
+
+const isVideoWatched = (thumbnail) => Boolean(thumbnail.querySelector('#progress'));
+
 // Enum values for which YouTube theme is currently being viewed.
 let curTheme = 0; // No theme set yet.
 const THEME_MODERN = 1; // The new Material Design theme.
@@ -123,7 +129,6 @@ const DEFAULT_USER_SETTINGS = {
   barSeparator: false,
   useExponentialScaling: false,
   barTooltip: true,
-  useOnVideoPage: false,
   showPercentage: false,
 };
 let userSettings = DEFAULT_USER_SETTINGS;
@@ -154,36 +159,11 @@ function exponentialRatingWidthPercentage(rating) {
   return 100 * Math.pow(2, 10 * (rating - 1));
 }
 
-// function getLikesToViewsPercentage(likes, views) {
-//   if (likes <= 0) return 0
-//   if (likes >= views) return 100
-//
-//   let ratio = likes / views
-//   let r = (ratio ** 0.21032389998435974 - 0.4999999701976776) / 0.09012361615896225
-//   let v = (Math.log(views) - 12.015865325927734) / 2.8472495079040527
-//
-//   let m0 = 0.040817804634571075
-//   let m1 = -0.27621328830718994
-//   let m2 = -0.05106991529464722
-//   let m3 = -0.02893015556037426
-//   let mean = m0 + m1 * v + m2 * v ** 2 + m3 * v ** 3
-//
-//   let s0 = -0.09283683449029922
-//   let s1 = -0.13813409209251404
-//   let s2 = 0.003354990854859352
-//   let s3 = 0.004593323916196823
-//   let log_std = s0 + s1 * v + s2 * v ** 2 + s3 * v ** 3
-//   let std = Math.exp(log_std)
-//
-//   let cdf = jStat.normal.cdf(r, mean, std)
-//   return cdf * 100
-// }
-
-const getRatingScoreHtml = ({ score }) => {
+const getRatingScoreHtml = ({ score, watched }) => {
   let isHighestScore = false;
   const watchMeText = ' - Watch me!';
 
-  if (score > HIGHEST_SCORE) {
+  if (score > HIGHEST_SCORE && !watched) {
     HIGHEST_SCORE = score;
     const previousHighestScore = document.getElementById('highest-score');
     if (previousHighestScore) {
@@ -192,7 +172,7 @@ const getRatingScoreHtml = ({ score }) => {
     }
     isHighestScore = true;
   }
-  const id = isHighestScore ? 'highest-score' : '';
+  const id = isHighestScore ? 'highest-score' : watched ? 'watched' : '';
   return `<ytrb-score-bar id=${id}>${score.toLocaleString()}${
     isHighestScore ? watchMeText : ''
   }</ytrb-score-bar>`;
@@ -393,6 +373,31 @@ function retryProcessingThumbnailInTheFuture(thumbnail) {
   }
 }
 
+const sortThumbnails = () => {
+  if (numberOfThumbnailProcessed === allThumbnails.length) {
+    return;
+  }
+
+  const t = allThumbnails[0].thumbnail;
+  let content = $(t).closest('#contents.ytd-item-section-renderer')[0];
+
+  const newContent = $(document.createElement('div'))
+    .attr('id', 'contents')
+    .addClass('ytd-item-section-renderer')[0];
+
+  allThumbnails.sort((a, b) => {
+    return b.score - a.score;
+  });
+
+  allThumbnails.forEach(({ thumbnail }) => {
+    newContent.insertAdjacentElement('beforeend', getFullThumbnail(thumbnail)[0]);
+  });
+
+  $(content).replaceWith(newContent);
+
+  numberOfThumbnailProcessed = allThumbnails.length;
+};
+
 function getVideoData(thumbnail, videoId) {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ query: 'videoApiRequest', videoId: videoId }, (likesData) => {
@@ -408,12 +413,19 @@ function getVideoData(thumbnail, videoId) {
   });
 }
 
-function addRatingBar(thumbnail, videoData) {
+function addRatingBar({ thumbnail, videoData }) {
+  const watched = isVideoWatched(thumbnail);
   // Add a rating bar to each thumbnail.
   $(thumbnail).append(getRatingScoreHtml({ score: videoData.score }));
+
+  allThumbnails.push({
+    thumbnail,
+    score: videoData.score,
+    watched,
+  });
 }
 
-function addRatingPercentage(thumbnail, videoData) {
+function addRatingPercentage(fullThumbnail, videoData) {
   // Add the rating text percentage below or next to the thumbnail.
   let metadataLine;
   if (curTheme === THEME_MOBILE) {
@@ -479,14 +491,18 @@ function processNewThumbnails() {
     getVideoData(thumbnail, videoId).then((videoData) => {
       if (videoData !== null) {
         if (userSettings.barHeight !== 0) {
-          addRatingBar(thumbnail, videoData);
+          addRatingBar({ videoData, thumbnail });
         }
         if (userSettings.showPercentage) {
-          addRatingPercentage(thumbnail, videoData);
+          const fullThumbnail = getFullThumbnail(thumbnail);
+          addRatingPercentage(fullThumbnail, videoData);
         }
       }
     });
   }
+
+  // sort videos on search pages by the highest scores
+  if (pageURL.includes('search')) sortThumbnails();
 }
 
 function getVideoDataFromTooltipText(text) {
@@ -548,6 +564,7 @@ function handleDomMutations() {
     if (pageURL != document.location.href) {
       pageURL = document.location.href;
       HIGHEST_SCORE = 0;
+      allThumbnails = [];
     }
 
     setTimeout(function () {
@@ -604,9 +621,7 @@ chrome.storage.sync.get(DEFAULT_USER_SETTINGS, function (storedSettings) {
       }
     }
 
-    if (userSettings.useOnVideoPage) {
-      insertCss('css/bar-video-page.css');
-    }
+    insertCss('css/bar-video-page.css');
   }
 
   document.documentElement.style.setProperty('--ytrb-bar-height', userSettings.barHeight + 'px');

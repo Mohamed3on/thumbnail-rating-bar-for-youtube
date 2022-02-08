@@ -85,3 +85,7 @@ ytrb-score-bar {
   color: #6aff6f;
   font-size: 15px;
 }
+
+#watched {
+  color: #ff0000;
+}
