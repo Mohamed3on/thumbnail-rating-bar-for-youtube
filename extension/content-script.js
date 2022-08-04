@@ -1,5 +1,5 @@
 // Variables for throttling handling DOM mutations.
-let HANDLE_DOM_MUTATIONS_THROTTLE_MS = 100;
+let HANDLE_DOM_MUTATIONS_THROTTLE_MS = 500;
 let domMutationsAreThrottled = false;
 let hasUnseenDomMutations = false;
 
@@ -427,7 +427,8 @@ function getVideoData(thumbnail, videoId) {
 function addRatingBar({ thumbnail, videoData }) {
   const watched = isVideoWatched(thumbnail);
   // Add a rating bar to each thumbnail.
-  $(thumbnail).append(getRatingScoreHtml({ score: videoData.score }));
+  $(thumbnail).append(getRatingScoreHtml({ score: videoData.score, watched }));
+  $(thumbnail).append(getRatingBarHtml(videoData));
 
   allThumbnails.push({
     thumbnail,
@@ -436,7 +437,7 @@ function addRatingBar({ thumbnail, videoData }) {
   });
 }
 
-function addRatingPercentage(fullThumbnail, videoData) {
+function addRatingPercentage(thumbnail, videoData) {
   // Add the rating text percentage below or next to the thumbnail.
   let metadataLine;
   if (curTheme === THEME_MOBILE) {
