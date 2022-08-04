@@ -1,5 +1,5 @@
 // Variables for throttling handling DOM mutations.
-const HANDLE_DOM_MUTATIONS_THROTTLE_MS = 100;
+let HANDLE_DOM_MUTATIONS_THROTTLE_MS = 100;
 let domMutationsAreThrottled = false;
 let hasUnseenDomMutations = false;
 
@@ -373,6 +373,17 @@ function retryProcessingThumbnailInTheFuture(thumbnail) {
   }
 }
 
+const getFullThumbnail = (thumbnail) =>
+  $(thumbnail).closest(
+    '.ytd-rich-item-renderer, ' + // Home page.
+      '.ytd-grid-renderer, ' + // Trending and subscriptions page.
+      '.ytd-expanded-shelf-contents-renderer, ' + // Also subscriptions page.
+      '.yt-horizontal-list-renderer, ' + // Channel page.
+      '.ytd-item-section-renderer, ' + // History / Player page.
+      '.ytd-horizontal-card-list-renderer, ' + // Gaming page.
+      '.ytd-playlist-video-list-renderer' // Playlist page.
+  );
+
 const sortThumbnails = () => {
   if (numberOfThumbnailProcessed === allThumbnails.length) {
     return;
@@ -503,7 +514,7 @@ function processNewThumbnails() {
 
   // sort videos on search pages by the highest scores
   if (pageURL.includes('search')) {
-    THROTTLE_MS = 1000;
+    HANDLE_DOM_MUTATIONS_THROTTLE_MS = 1000;
     sortThumbnails();
   }
 }
