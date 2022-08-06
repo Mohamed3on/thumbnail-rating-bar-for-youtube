@@ -338,7 +338,7 @@ function getThumbnailsAndIds(thumbnails) {
 
 function getVideoDataObject(likes, dislikes) {
   let total = likes + dislikes;
-  let rating = total ? (likes - dislikes) / total : null;
+  let rating = total ? likes / total : null;
   return {
     likes: likes,
     dislikes: dislikes,
