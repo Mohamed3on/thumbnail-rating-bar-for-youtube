@@ -89,3 +89,16 @@ ytrb-score-bar {
 #watched {
   color: #ff0000;
 }
+
+.ytrb-find-best-thumbnail {
+  background-color: green;
+  font-weight: bold;
+  color: white;
+  padding: 6px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.ytrb-find-best-thumbnail:hover {
+  background-color: darkgreen;
+}

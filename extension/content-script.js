@@ -1,5 +1,5 @@
 // Variables for throttling handling DOM mutations.
-let HANDLE_DOM_MUTATIONS_THROTTLE_MS = 500;
+let HANDLE_DOM_MUTATIONS_THROTTLE_MS = 1000;
 let domMutationsAreThrottled = false;
 let hasUnseenDomMutations = false;
 
@@ -10,8 +10,9 @@ let isPendingApiRetry = false;
 let thumbnailsToRetry = [];
 
 let allThumbnails = [];
-
 let numberOfThumbnailProcessed = 0;
+
+let addedFindBestThumbnailButton = false;
 
 const isVideoWatched = (thumbnail) => Boolean(thumbnail.querySelector('#progress'));
 
@@ -161,21 +162,17 @@ function exponentialRatingWidthPercentage(rating) {
 
 const getRatingScoreHtml = ({ score, watched }) => {
   let isHighestScore = false;
-  const watchMeText = ' - Watch me!';
 
   if (score > HIGHEST_SCORE && !watched) {
     HIGHEST_SCORE = score;
     const previousHighestScore = document.getElementById('highest-score');
     if (previousHighestScore) {
       previousHighestScore.removeAttribute('id');
-      previousHighestScore.textContent = previousHighestScore.textContent.replace(watchMeText, '');
     }
     isHighestScore = true;
   }
   const id = isHighestScore ? 'highest-score' : watched ? 'watched' : '';
-  return `<ytrb-score-bar id=${id}>${score.toLocaleString()}${
-    isHighestScore ? watchMeText : ''
-  }</ytrb-score-bar>`;
+  return `<ytrb-score-bar id=${id}>${score.toLocaleString()}</ytrb-score-bar>`;
 };
 
 function getRatingBarHtml(videoData) {
@@ -515,7 +512,6 @@ function processNewThumbnails() {
 
   // sort videos on search pages by the highest scores
   if (pageURL.includes('search')) {
-    HANDLE_DOM_MUTATIONS_THROTTLE_MS = 1000;
     sortThumbnails();
   }
 }
@@ -567,6 +563,22 @@ function handleDomMutations() {
     // Turn on throttling.
     domMutationsAreThrottled = true;
 
+    if (!addedFindBestThumbnailButton && $('ytd-watch-next-secondary-results-renderer').length) {
+      const findBestThumbnail = document.createElement('button');
+      findBestThumbnail.innerText = 'Scroll to best next video';
+      findBestThumbnail.className = 'ytrb-find-best-thumbnail';
+
+      findBestThumbnail.addEventListener(
+        'click',
+        () => {
+          var element = document.querySelector('#highest-score');
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } /* do nothing */
+      );
+
+      $('#related').prepend(findBestThumbnail);
+      addedFindBestThumbnailButton = true;
+    }
     // Run the updates.
     if (userSettings.barHeight !== 0 || userSettings.showPercentage) {
       processNewThumbnails();
