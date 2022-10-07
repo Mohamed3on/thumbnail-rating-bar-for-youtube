@@ -14,8 +14,13 @@ let numberOfThumbnailProcessed = 0;
 
 let addedFindBestThumbnailButton = false;
 
-const isVideoWatched = (thumbnail) => Boolean(thumbnail.querySelector('#progress'));
+const isVideoMostlyWatched = (thumbnail) => {
+  const progress = thumbnail.querySelector('#progress');
+  // only return true if at least 50% of the video has been watched
+  if (progress) return parseInt(progress.style.width) < 50;
 
+  return false;
+};
 // Enum values for which YouTube theme is currently being viewed.
 let curTheme = 0; // No theme set yet.
 const THEME_MODERN = 1; // The new Material Design theme.
@@ -422,7 +427,7 @@ function getVideoData(thumbnail, videoId) {
 }
 
 function addRatingBar({ thumbnail, videoData }) {
-  const watched = isVideoWatched(thumbnail);
+  const watched = isVideoMostlyWatched(thumbnail);
   // Add a rating bar to each thumbnail.
   $(thumbnail).append(getRatingScoreHtml({ score: videoData.score, watched }));
   $(thumbnail).append(getRatingBarHtml(videoData));
