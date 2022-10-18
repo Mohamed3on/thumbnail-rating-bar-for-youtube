@@ -14,12 +14,8 @@ let numberOfThumbnailProcessed = 0;
 
 let addedFindBestThumbnailButton = false;
 
-const isVideoMostlyWatched = (thumbnail) => {
-  const progress = thumbnail.querySelector('#progress');
-  // only return true if at least 50% of the video has been watched
-  if (progress) return parseInt(progress.style.width) < 50;
-
-  return false;
+const isVideoWatched = (thumbnail) => {
+  return !!thumbnail.querySelector('#progress');
 };
 // Enum values for which YouTube theme is currently being viewed.
 let curTheme = 0; // No theme set yet.
@@ -427,7 +423,7 @@ function getVideoData(thumbnail, videoId) {
 }
 
 function addRatingBar({ thumbnail, videoData }) {
-  const watched = isVideoMostlyWatched(thumbnail);
+  const watched = isVideoWatched(thumbnail);
   // Add a rating bar to each thumbnail.
   $(thumbnail).append(getRatingScoreHtml({ score: videoData.score, watched }));
   $(thumbnail).append(getRatingBarHtml(videoData));
@@ -611,8 +607,21 @@ function handleDomMutations() {
   }
 }
 
+const delayedStart = () => {
+  const promise1 = new Promise((resolve) => {
+    const interval = setInterval(() => {
+      if (document.querySelector('#progress')) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 300);
+  });
+  const promise2 = new Promise((resolve) => setTimeout(resolve, 1000, 'slow'));
+
+  Promise.any([promise1, promise2]).then(() => handleDomMutations());
+};
 // An observer for watching changes to the body element.
-const mutationObserver = new MutationObserver(handleDomMutations);
+const mutationObserver = new MutationObserver(delayedStart);
 
 function insertCss(url) {
   chrome.runtime.sendMessage({
