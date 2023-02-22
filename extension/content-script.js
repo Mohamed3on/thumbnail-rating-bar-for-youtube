@@ -424,6 +424,15 @@ function getVideoData(thumbnail, videoId) {
 
 function addRatingBar({ thumbnail, videoData }) {
   const watched = isVideoWatched(thumbnail);
+  const isPlaylist = !!thumbnail.querySelector(
+    'ytd-thumbnail-overlay-side-panel-renderer, ytd-thumbnail-overlay-bottom-panel-renderer'
+  );
+
+  // don't add rating bar to playlists as they're not actual videos
+  if (isPlaylist) {
+    return;
+  }
+
   // Add a rating bar to each thumbnail.
   $(thumbnail).append(getRatingScoreHtml({ score: videoData.score, watched }));
   $(thumbnail).append(getRatingBarHtml(videoData));
@@ -610,13 +619,18 @@ function handleDomMutations() {
 const delayedStart = () => {
   const promise1 = new Promise((resolve) => {
     const interval = setInterval(() => {
-      if (document.querySelector('#progress')) {
+      if (document.location.href.includes('search')) {
+        if (document.querySelector('#progress')) {
+          clearInterval(interval);
+          resolve();
+        }
+      } else {
         clearInterval(interval);
         resolve();
       }
     }, 300);
   });
-  const promise2 = new Promise((resolve) => setTimeout(resolve, 1000, 'slow'));
+  const promise2 = new Promise((resolve) => setTimeout(resolve, 3000, 'slow'));
 
   Promise.any([promise1, promise2]).then(() => handleDomMutations());
 };
@@ -697,6 +711,5 @@ chrome.storage.sync.get(DEFAULT_USER_SETTINGS, function (storedSettings) {
     );
   }
 
-  handleDomMutations();
   mutationObserver.observe(document.body, { childList: true, subtree: true });
 });
