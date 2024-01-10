@@ -161,10 +161,10 @@ function exponentialRatingWidthPercentage(rating) {
   return 100 * Math.pow(2, 10 * (rating - 1));
 }
 
-const getRatingScoreHtml = ({ score, watched }) => {
+const getRatingScoreHtml = ({ score, watched, isShort }) => {
   let isHighestScore = false;
 
-  if (score > HIGHEST_SCORE && !watched) {
+  if (score > HIGHEST_SCORE && !watched && !isShort) {
     HIGHEST_SCORE = score;
     const previousHighestScore = document.getElementById('highest-score');
     if (previousHighestScore) {
@@ -325,7 +325,7 @@ function getThumbnailsAndIds(thumbnails) {
     $(thumbnail).attr('data-ytrb-processed', url);
 
     // Extract the video ID from the URL.
-    const match = url.match(/.*[?&]v=([^&]+).*/);
+    const match = url.match(/.*[?&]v=([^&]+).*/) || url.match(/^\/shorts\/(.+)$/);
     if (match) {
       const id = match[1];
       thumbnailsAndVideoIds.push([thumbnail, id]);
@@ -433,9 +433,12 @@ function addRatingBar({ thumbnail, videoData }) {
     return;
   }
 
+  const isShort = !!$(thumbnail).attr('href').includes('/shorts/');
   // Add a rating bar to each thumbnail.
-  $(thumbnail).append(getRatingScoreHtml({ score: videoData.score, watched }));
+  $(thumbnail).append(getRatingScoreHtml({ score: videoData.score, watched, isShort }));
   $(thumbnail).append(getRatingBarHtml(videoData));
+
+  const url = $(thumbnail).attr('href');
 
   allThumbnails.push({
     thumbnail,
