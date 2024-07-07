@@ -505,23 +505,28 @@ function addRatingPercentage(thumbnail, videoData) {
   }
 }
 
-function processNewThumbnails() {
+async function processNewThumbnails() {
   const thumbnails = getNewThumbnails();
   const thumbnailsAndVideoIds = getThumbnailsAndIds(thumbnails);
 
-  for (const [thumbnail, videoId] of thumbnailsAndVideoIds) {
-    getVideoData(thumbnail, videoId).then((videoData) => {
-      if (videoData !== null) {
-        if (userSettings.barHeight !== 0) {
-          addRatingBar({ videoData, thumbnail });
-        }
-        if (userSettings.showPercentage) {
-          const fullThumbnail = getFullThumbnail(thumbnail);
-          addRatingPercentage(fullThumbnail, videoData);
-        }
+  // Use Promise.all to parallelize the API requests
+  const videoDataPromises = thumbnailsAndVideoIds.map(([thumbnail, videoId]) =>
+    getVideoData(thumbnail, videoId).then((videoData) => ({ thumbnail, videoData }))
+  );
+
+  const results = await Promise.all(videoDataPromises);
+
+  results.forEach(({ thumbnail, videoData }) => {
+    if (videoData !== null) {
+      if (userSettings.barHeight !== 0) {
+        addRatingBar({ videoData, thumbnail });
       }
-    });
-  }
+      if (userSettings.showPercentage) {
+        const fullThumbnail = getFullThumbnail(thumbnail);
+        addRatingPercentage(fullThumbnail, videoData);
+      }
+    }
+  });
 
   // sort videos on search pages by the highest scores
   if (pageURL.includes('search')) {
@@ -594,7 +599,7 @@ function handleDomMutations() {
     }
     // Run the updates.
     if (userSettings.barHeight !== 0 || userSettings.showPercentage) {
-      processNewThumbnails();
+      processNewThumbnails().catch(console.error); // Handle any errors
     }
     if (userSettings.barTooltip || userSettings.useExponentialScaling) {
       updateVideoRatingBar();
