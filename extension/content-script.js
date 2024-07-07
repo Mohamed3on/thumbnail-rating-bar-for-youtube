@@ -509,22 +509,27 @@ async function processNewThumbnails() {
   const thumbnails = getNewThumbnails();
   const thumbnailsAndVideoIds = getThumbnailsAndIds(thumbnails);
 
-  // Use Promise.all to parallelize the API requests
+  // Use Promise.allSettled to make all requests regardless of failures
   const videoDataPromises = thumbnailsAndVideoIds.map(([thumbnail, videoId]) =>
     getVideoData(thumbnail, videoId).then((videoData) => ({ thumbnail, videoData }))
   );
 
-  const results = await Promise.all(videoDataPromises);
+  const results = await Promise.allSettled(videoDataPromises);
 
-  results.forEach(({ thumbnail, videoData }) => {
-    if (videoData !== null) {
-      if (userSettings.barHeight !== 0) {
-        addRatingBar({ videoData, thumbnail });
+  results.forEach((result) => {
+    if (result.status === 'fulfilled') {
+      const { thumbnail, videoData } = result.value;
+      if (videoData !== null) {
+        if (userSettings.barHeight !== 0) {
+          addRatingBar({ videoData, thumbnail });
+        }
+        if (userSettings.showPercentage) {
+          const fullThumbnail = getFullThumbnail(thumbnail);
+          addRatingPercentage(fullThumbnail, videoData);
+        }
       }
-      if (userSettings.showPercentage) {
-        const fullThumbnail = getFullThumbnail(thumbnail);
-        addRatingPercentage(fullThumbnail, videoData);
-      }
+    } else {
+      console.error('Failed to process thumbnail:', result.reason);
     }
   });
 
