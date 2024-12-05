@@ -591,13 +591,14 @@ function handleDomMutations() {
       findBestThumbnail.innerText = 'Scroll to best next video';
       findBestThumbnail.className = 'ytrb-find-best-thumbnail';
 
-      findBestThumbnail.addEventListener(
-        'click',
-        () => {
-          var element = document.querySelector('#highest-score');
+      findBestThumbnail.addEventListener('click', () => {
+        var element = document.querySelector('#highest-score');
+        if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } /* do nothing */
-      );
+        } else {
+          console.error('No element found with id #highest-score');
+        }
+      });
 
       $('#related').prepend(findBestThumbnail);
       addedFindBestThumbnailButton = true;

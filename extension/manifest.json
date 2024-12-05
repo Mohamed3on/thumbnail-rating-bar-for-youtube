@@ -18,27 +18,21 @@
     "chrome_style": false
   },
   "background": {
-    "scripts": [
-      "background.js"
-    ],
+    "scripts": ["background.js"],
     "persistent": false
   },
   "content_scripts": [
     {
-      "matches": [
-        "*://*.youtube.com/*"
-      ],
-      "js": [
-        "lib/jquery-3.6.0.min.js",
-        "content-script.js"
-      ],
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["lib/jquery-3.6.0.min.js", "content-script.js"],
       "run_at": "document_end"
     }
   ],
   "permissions": [
     "*://*.youtube.com/*",
     "*://*.returnyoutubedislikeapi.com/*",
-    "storage"
+    "storage",
+    "https://www.googleapis.com/*"
   ],
   "web_accessible_resources": [
     "css/bar-blue-gray.css",
