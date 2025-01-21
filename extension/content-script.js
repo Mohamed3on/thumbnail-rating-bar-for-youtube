@@ -3,6 +3,23 @@ let HANDLE_DOM_MUTATIONS_THROTTLE_MS = 1000;
 let domMutationsAreThrottled = false;
 let hasUnseenDomMutations = false;
 
+// Function to scroll to highest score video
+const scrollToHighestScore = () => {
+  var element = document.querySelector('#highest-score');
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+};
+
+// Add keyboard shortcut listener
+document.addEventListener('keydown', (e) => {
+  // Check for Cmd+B (Mac) or Ctrl+B (Windows/Linux)
+  if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+    e.preventDefault(); // Prevent default browser behavior
+    scrollToHighestScore();
+  }
+});
+
 // Variables for handling what to do when an API request fails.
 const API_RETRY_DELAY = 5000;
 const MAX_RETRIES_PER_THUMBNAIL = 10;
@@ -591,14 +608,7 @@ function handleDomMutations() {
       findBestThumbnail.innerText = 'Scroll to best next video';
       findBestThumbnail.className = 'ytrb-find-best-thumbnail';
 
-      findBestThumbnail.addEventListener('click', () => {
-        var element = document.querySelector('#highest-score');
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else {
-          console.error('No element found with id #highest-score');
-        }
-      });
+      findBestThumbnail.addEventListener('click', scrollToHighestScore);
 
       $('#related').prepend(findBestThumbnail);
       addedFindBestThumbnailButton = true;
