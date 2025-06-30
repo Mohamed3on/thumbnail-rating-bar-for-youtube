@@ -32,7 +32,7 @@ let numberOfThumbnailProcessed = 0;
 let addedFindBestThumbnailButton = false;
 
 const isVideoWatched = (thumbnail) => {
-  return !!thumbnail.querySelector('#progress');
+  return !!thumbnail.querySelector('.ytThumbnailOverlayProgressBarHostWatchedProgressBarSegment');
 };
 // Enum values for which YouTube theme is currently being viewed.
 let curTheme = 0; // No theme set yet.
@@ -81,7 +81,9 @@ THUMBNAIL_SELECTORS[THEME_MODERN] =
   // All types except the video wall. The URL is on the selected a link.
   // The mini-player thumbnail will not have an href attribute, which is why
   // we require that it exists.
-  'a#thumbnail[href]';
+  'a#thumbnail[href], ' +
+  // New yt-lockup-view-model layout (modern YouTube layout)
+  'a.yt-lockup-view-model-wiz__content-image[href]';
 
 THUMBNAIL_SELECTORS[THEME_CLASSIC] =
   '' +
@@ -455,8 +457,6 @@ function addRatingBar({ thumbnail, videoData }) {
   $(thumbnail).append(getRatingScoreHtml({ score: videoData.score, watched, isShort }));
   $(thumbnail).append(getRatingBarHtml(videoData));
 
-  const url = $(thumbnail).attr('href');
-
   allThumbnails.push({
     thumbnail,
     score: videoData.score,
@@ -644,7 +644,7 @@ const delayedStart = () => {
   const promise1 = new Promise((resolve) => {
     const interval = setInterval(() => {
       if (document.location.href.includes('search')) {
-        if (document.querySelector('#progress')) {
+        if (document.querySelector('.ytThumbnailOverlayProgressBarHostWatchedProgressBarSegment')) {
           clearInterval(interval);
           resolve();
         }

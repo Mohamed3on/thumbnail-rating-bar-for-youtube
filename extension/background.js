@@ -1,10 +1,10 @@
 // All AJAX requests are made from this background script.
 
-// Default cache duration: 10 minutes
-const DEFAULT_CACHE_DURATION = 10 * 60 * 1000;
+// Default cache duration: 1 day
+const DEFAULT_CACHE_DURATION = 24 * 60 * 60 * 1000;
 
 // Define the YouTube API key directly
-const YOUTUBE_API_KEY = 'AIzaSyDF46IyZYwPlb6ZBxAD6-IuLxVNYsbTIwQ'; // You'll need to get an API key from Google Cloud Console
+const YOUTUBE_API_KEY = 'AIzaSyBN0Nr3xwj3d4VUaWMaeCdelBcqQ8-8rW0'; // You'll need to get an API key from Google Cloud Console
 
 // --- Helper Functions ---
 
@@ -12,11 +12,6 @@ async function getCacheDuration() {
   const settings = await chrome.storage.sync.get({ cacheDuration: DEFAULT_CACHE_DURATION });
   return settings.cacheDuration;
 }
-
-// No longer needed as we fetch specific keys
-// async function getCache() {
-//   return await chrome.storage.local.get(null);
-// }
 
 async function cleanupExpiredCache() {
   // Get current time and configured cache duration
@@ -75,8 +70,8 @@ async function fetchFromYouTubeAPI(videoId) {
 // --- Event Listener ---
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  (async () => {
-    if (message.query === 'videoApiRequest') {
+  if (message.query === 'videoApiRequest') {
+    (async () => {
       const videoId = message.videoId;
       if (!videoId) {
         console.error('No videoId provided in videoApiRequest');
@@ -108,12 +103,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             console.log(`Cache miss for ${videoId}, fetching...`);
           }
 
-          // Fetching logic remains the same
+          // Fetching logic with timeout for RYD API
           let likesData;
           try {
-            const rydResponse = await fetch(
-              `https://returnyoutubedislikeapi.com/Votes?videoId=${videoId}`
-            );
+            // Create a timeout promise that rejects after 1 second
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('RYD API timeout')), 1000);
+            });
+
+            // Race between the fetch and timeout
+            const rydResponse = await Promise.race([
+              fetch(`https://returnyoutubedislikeapi.com/Votes?videoId=${videoId}`),
+              timeoutPromise,
+            ]);
+
             if (rydResponse.ok) {
               const data = await rydResponse.json();
               likesData = {
@@ -132,7 +135,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               `Initial fetch failed for ${videoId}, trying YouTube API fallback:`,
               fetchError
             );
-            likesData = await fetchFromYouTubeAPI(videoId);
+            try {
+              likesData = await fetchFromYouTubeAPI(videoId);
+              console.log(`YouTube API fallback successful for ${videoId}`);
+            } catch (error) {
+              console.error(`YouTube API fallback failed for ${videoId}:`, error);
+              sendResponse(null);
+              return;
+            }
           }
 
           // Store the new data with a fresh timestamp
@@ -148,33 +158,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.error(`Error processing videoApiRequest for ${videoId}:`, error);
         sendResponse(null); // Send null on error
       }
-    } else if (message.query === 'insertCss') {
-      if (sender.tab && sender.tab.id && message.url) {
-        try {
-          await chrome.scripting.insertCSS({
-            target: { tabId: sender.tab.id },
-            files: [message.url],
-          });
-          // console.log(`Injected CSS: ${message.url} into tab ${sender.tab.id}`);
-        } catch (error) {
-          console.error(`Failed to insert CSS: ${message.url}`, error);
-        }
-      } else {
-        console.error('Missing tab ID or URL for insertCss request.');
-      }
-    } else if (message.query === 'updateSettings') {
-      if (message.cacheDuration !== undefined) {
-        try {
-          await chrome.storage.sync.set({ cacheDuration: message.cacheDuration });
-          console.log(`Updated cache duration to ${message.cacheDuration}`);
-        } catch (error) {
-          console.error('Failed to update settings in storage:', error);
-        }
-      }
+    })();
+    return true; // Keep the message channel open for the async response
+  } else if (message.query === 'insertCss') {
+    if (sender.tab && sender.tab.id && message.url) {
+      chrome.scripting
+        .insertCSS({
+          target: { tabId: sender.tab.id },
+          files: [message.url],
+        })
+        .catch((error) => console.error(`Failed to insert CSS: ${message.url}`, error));
+    } else {
+      console.error('Missing tab ID or URL for insertCss request.');
     }
-  })();
-  return true;
+  } else if (message.query === 'updateSettings') {
+    if (message.cacheDuration !== undefined) {
+      chrome.storage.sync
+        .set({ cacheDuration: message.cacheDuration })
+        .then(() => console.log(`Updated cache duration to ${message.cacheDuration}`))
+        .catch((error) => console.error('Failed to update settings in storage:', error));
+    }
+  }
 });
-
-// Optional: Initial cleanup on service worker start
-// cleanupExpiredCache().catch(console.error);

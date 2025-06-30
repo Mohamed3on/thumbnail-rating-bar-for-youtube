@@ -10,7 +10,7 @@
 ytrb-bar {
   display: block;
   position: absolute;
-  width: 100%;
+  width: inherit;
   z-index: 999;
   transition: opacity 0.2s ease-out 0.2s;
   opacity: var(--ytrb-bar-opacity);
