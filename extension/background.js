@@ -1,12 +1,12 @@
-// All AJAX requests are made from this background script.
-
 // Default cache duration: 1 day
 const DEFAULT_CACHE_DURATION = 24 * 60 * 60 * 1000;
 
-// Define the YouTube API key directly
-const YOUTUBE_API_KEY = 'AIzaSyBN0Nr3xwj3d4VUaWMaeCdelBcqQ8-8rW0'; // You'll need to get an API key from Google Cloud Console
-
 // --- Helper Functions ---
+
+async function getYouTubeAPIKey() {
+  const result = await chrome.storage.sync.get('youtubeApiKey');
+  return result.youtubeApiKey;
+}
 
 async function getCacheDuration() {
   const settings = await chrome.storage.sync.get({ cacheDuration: DEFAULT_CACHE_DURATION });
@@ -45,8 +45,13 @@ async function cleanupExpiredCache() {
 
 async function fetchFromYouTubeAPI(videoId) {
   try {
+    const apiKey = await getYouTubeAPIKey();
+    if (!apiKey) {
+      throw new Error('YouTube API key not configured. Please set it in the extension options.');
+    }
+
     const response = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoId}&key=${YOUTUBE_API_KEY}`
+      `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoId}&key=${apiKey}`
     );
     if (!response.ok) {
       throw new Error(`YouTube API request failed with status ${response.status}`);
@@ -172,10 +177,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.error('Missing tab ID or URL for insertCss request.');
     }
   } else if (message.query === 'updateSettings') {
+    const updates = {};
     if (message.cacheDuration !== undefined) {
+      updates.cacheDuration = message.cacheDuration;
+    }
+    if (message.youtubeApiKey !== undefined) {
+      updates.youtubeApiKey = message.youtubeApiKey;
+    }
+
+    if (Object.keys(updates).length > 0) {
       chrome.storage.sync
-        .set({ cacheDuration: message.cacheDuration })
-        .then(() => console.log(`Updated cache duration to ${message.cacheDuration}`))
+        .set(updates)
+        .then(() => console.log('Updated settings:', updates))
         .catch((error) => console.error('Failed to update settings in storage:', error));
     }
   }

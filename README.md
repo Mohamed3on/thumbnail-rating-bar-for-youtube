@@ -27,12 +27,24 @@ If you would also like to see the likes/dislikes rating bar that used to be
 available on each video page, you can also install [their
 extension](https://returnyoutubedislike.com/install).
 
+## YouTube API Key (Fallback)
+
+For improved reliability, the extension can use the official YouTube Data API as a fallback when the primary data source is unavailable. To enable this:
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Create a new project or select an existing one
+3. Enable the YouTube Data API v3
+4. Create an API key credential
+5. Add the API key in the extension's options page
+
+**Important:** Keep your API key secure and never share it publicly. The extension stores your API key locally using Chrome's secure storage.
+
 ## Mobile Support
 
 This extension also works on mobile browsers that support Chrome extensions,
-such as [Kiwi Browser](https://kiwibrowser.com) for Android.  
+such as [Kiwi Browser](https://kiwibrowser.com) for Android.
 
-## Rate Limiting and the Cache Duration Setting 
+## Rate Limiting and the Cache Duration Setting
 
 The Return YouTube Dislike API is rate limited by IP address, so if you notice
 that some thumbnails aren't receiving rating bars, you may be getting
@@ -63,12 +75,12 @@ With exponential scaling, each reduction in 10% of the rating from 100% will
 half the width of the likes bar:
 
 | Rating | Width |
-|--------|-------|
-|   100% |  100% |
-|    90% |   50% |
-|    80% |   25% |
-|    70% | 12.5% |
-|    ... |  etc. |
+| ------ | ----- |
+| 100%   | 100%  |
+| 90%    | 50%   |
+| 80%    | 25%   |
+| 70%    | 12.5% |
+| ...    | etc.  |
 
 Note: If you also have the [Return YouTube Dislike
 extension](https://returnyoutubedislike.com/install) installed, which adds a
@@ -81,13 +93,14 @@ Special thanks to [Qarthak](https://github.com/Qarthak) for
 ## Why Use This Extension
 
 Using YouTube usually involves browsing through many video previews. These video previews usually contain the following:
-* Thumbnail image
-* Video title
-* Creator’s name
-* Creator’s subscriber count (sometimes)
-* View count
-* Short description (sometimes)
-* Video length
+
+- Thumbnail image
+- Video title
+- Creator’s name
+- Creator’s subscriber count (sometimes)
+- View count
+- Short description (sometimes)
+- Video length
 
 We use this information to try to estimate the value of the content before
 exploring it further. A useful indicator of the value of the content is how
