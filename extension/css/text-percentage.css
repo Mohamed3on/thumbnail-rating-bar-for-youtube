@@ -1,0 +1,13 @@
+/* Text percentage styling */
+.ytrb-percentage {
+  margin-left: 4px;
+}
+
+/* Ensure text percentages are properly styled across different YouTube layouts */
+ytd-video-meta-block .ytrb-percentage,
+.ytd-grid-video-renderer .ytrb-percentage,
+.ytm-badge-and-byline-item-byline .ytrb-percentage {
+  color: var(--yt-spec-text-secondary);
+  font-size: var(--ytd-video-meta-font-size, 12px);
+  line-height: var(--ytd-video-meta-line-height, 1.4);
+}

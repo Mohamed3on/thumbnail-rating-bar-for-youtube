@@ -75,11 +75,11 @@ async function fetchFromYouTubeAPI(videoId) {
 // --- Event Listener ---
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.query === 'videoApiRequest') {
+  if (message.query === 'getLikesData') {
     (async () => {
       const videoId = message.videoId;
       if (!videoId) {
-        console.error('No videoId provided in videoApiRequest');
+        console.error('No videoId provided in getLikesData');
         sendResponse(null);
         return;
       }
@@ -160,7 +160,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           cleanupExpiredCache().catch(console.error);
         }
       } catch (error) {
-        console.error(`Error processing videoApiRequest for ${videoId}:`, error);
+        console.error(`Error processing getLikesData for ${videoId}:`, error);
         sendResponse(null); // Send null on error
       }
     })();
