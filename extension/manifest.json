@@ -21,13 +21,17 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.youtube.com/*"],
-      "js": ["lib/jquery-3.6.0.min.js", "content-script.js"],
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": ["content-script.js"],
       "run_at": "document_end"
     }
   ],
   "host_permissions": [
     "*://*.youtube.com/*",
+    "*://youtube.com/*",
     "*://*.returnyoutubedislikeapi.com/*",
     "https://www.googleapis.com/*"
   ],
@@ -35,20 +39,21 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "css/bar-blue-gray.css",
-        "css/bar-blue-gray-video-page.css",
+        "css/bar.css",
+        "css/bar-bottom.css",
         "css/bar-bottom-separator.css",
         "css/bar-bottom-tooltip.css",
-        "css/bar-bottom.css",
-        "css/bar-green-red.css",
-        "css/bar-green-red-video-page.css",
         "css/bar-tooltip.css",
+        "css/bar-top.css",
         "css/bar-top-separator.css",
         "css/bar-top-tooltip.css",
-        "css/bar-top.css",
-        "css/bar.css"
+        "css/bar-video-page.css",
+        "css/text-percentage.css"
       ],
-      "matches": ["*://*.youtube.com/*"]
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://youtube.com/*"
+      ]
     }
   ]
 }

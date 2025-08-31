@@ -63,7 +63,9 @@ let needsSort = false; // Track if sorting is needed
 // Cache selectors for better performance
 const THUMBNAIL_SELECTORS = [
   'a#thumbnail[href*="/watch?v="]:not([data-ytrb-processed])',
+  'a#thumbnail[href*="/live/"]:not([data-ytrb-processed])',
   'a.yt-lockup-view-model__content-image[href*="/watch?v="]:not([data-ytrb-processed])',
+  'a.yt-lockup-view-model__content-image[href*="/live/"]:not([data-ytrb-processed])',
   'a.shortsLockupViewModelHostEndpoint[href*="/shorts/"]:not([data-ytrb-processed])',
   'a.ytp-videowall-still[href]:not([data-ytrb-processed])'
 ];
@@ -543,7 +545,7 @@ function processNewThumbnails() {
     if (!href) continue;
 
     // Extract video ID
-    const match = href.match(/.*[?&]v=([^&]+).*/) || href.match(/^\/shorts\/(.+)$/);
+    const match = href.match(/.*[?&]v=([^&]+).*/) || href.match(/^\/shorts\/(.+)$/) || href.match(/^\/live\/([^?&]+)/);
     if (!match) continue;
 
     const videoId = match[1];
