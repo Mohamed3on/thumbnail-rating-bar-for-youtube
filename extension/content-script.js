@@ -60,6 +60,14 @@ let numberOfThumbnailProcessed = 0;
 let processedVideoIds = new Set(); // Cache to prevent reprocessing
 let needsSort = false; // Track if sorting is needed
 
+// Cache selectors for better performance
+const THUMBNAIL_SELECTORS = [
+  'a#thumbnail[href*="/watch?v="]:not([data-ytrb-processed])',
+  'a.yt-lockup-view-model__content-image[href*="/watch?v="]:not([data-ytrb-processed])',
+  'a.shortsLockupViewModelHostEndpoint[href*="/shorts/"]:not([data-ytrb-processed])',
+  'a.ytp-videowall-still[href]:not([data-ytrb-processed])'
+];
+
 let addedFindBestThumbnailButton = false;
 
 const isVideoWatched = (thumbnail) => {
@@ -519,13 +527,11 @@ function addRatingPercentage(thumbnailElement, videoData) {
 }
 
 function processNewThumbnails() {
-  // Find all unprocessed thumbnail links
-  const thumbnailLinks = document.querySelectorAll(
-    'a#thumbnail[href*="/watch?v="]:not([data-ytrb-processed]), ' +
-    'a.yt-lockup-view-model__content-image[href*="/watch?v="]:not([data-ytrb-processed]), ' +
-    'a.shortsLockupViewModelHostEndpoint[href*="/shorts/"]:not([data-ytrb-processed]), ' +
-    'a.ytp-videowall-still[href]:not([data-ytrb-processed])'
-  );
+  // Use cached selectors and combine results more efficiently
+  const thumbnailLinks = [];
+  for (const selector of THUMBNAIL_SELECTORS) {
+    thumbnailLinks.push(...document.querySelectorAll(selector));
+  }
 
   for (const link of thumbnailLinks) {
     // Skip mix recommendations and playlists
@@ -542,13 +548,13 @@ function processNewThumbnails() {
 
     const videoId = match[1];
     
+    link.setAttribute(PROCESSED_DATA_ATTRIBUTE_NAME, '');
+    
     // Skip if already processed this video ID
     if (processedVideoIds.has(videoId)) {
-      link.setAttribute(PROCESSED_DATA_ATTRIBUTE_NAME, '');
       continue;
     }
     
-    link.setAttribute(PROCESSED_DATA_ATTRIBUTE_NAME, '');
     processedVideoIds.add(videoId);
 
     // Get video data and add rating elements
@@ -563,6 +569,7 @@ function processNewThumbnails() {
       }
     }).catch(() => {
       link.removeAttribute(PROCESSED_DATA_ATTRIBUTE_NAME);
+      processedVideoIds.delete(videoId);
     });
   }
 
