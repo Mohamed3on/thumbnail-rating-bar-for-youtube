@@ -46,8 +46,6 @@ document.addEventListener('keydown', (e) => {
 const MAX_API_RETRIES_PER_THUMBNAIL = 10;
 const API_RETRY_DELAY_MIN_MS = 3000;
 const API_RETRY_UNIFORM_DISTRIBUTION_WIDTH_MS = 3000;
-let isPendingApiRetry = false;
-let thumbnailsToRetry = [];
 
 
 // Whether we are currently viewing the mobile version of the YouTube website.
@@ -63,7 +61,6 @@ const IS_USING_DARK_THEME =
   ) === " #181818";
 
 let allThumbnails = [];
-let numberOfThumbnailProcessed = 0;
 let processedVideoIds = new Set(); // Cache to prevent reprocessing
 let needsSort = false; // Track if sorting is needed
 
@@ -467,9 +464,7 @@ const getFullThumbnail = (thumbnail) =>
   );
 
 const sortThumbnails = () => {
-  if (numberOfThumbnailProcessed === allThumbnails.length) {
-    return;
-  }
+  if (allThumbnails.length === 0) return;
 
   const t = allThumbnails[0].thumbnail;
   let content = t.closest('#contents.ytd-item-section-renderer');
@@ -498,8 +493,6 @@ const sortThumbnails = () => {
   });
 
   content.replaceWith(newContent);
-
-  numberOfThumbnailProcessed = allThumbnails.length;
 };
 
 
@@ -701,7 +694,6 @@ function handleDomMutations() {
       HIGHEST_SCORE = 0;
       // Clean up data structures to prevent memory leaks
       allThumbnails = [];
-      numberOfThumbnailProcessed = 0;
       processedVideoIds.clear();
       needsSort = false;
       addedFindBestThumbnailButton = false;
@@ -710,12 +702,6 @@ function handleDomMutations() {
 }
 
 
-// Periodic check to catch any thumbnails that might have been missed
-function periodicThumbnailCheck() {
-  // Only do light processing - the mutation observer handles most cases
-  updateVideoRatingBar();
-  setTimeout(periodicThumbnailCheck, 5000);
-}
 
 // Simple mutation observer
 const mutationObserver = new MutationObserver(handleDomMutations);
