@@ -1,7 +1,16 @@
-// Variables for throttling handling DOM mutations.
-let HANDLE_DOM_MUTATIONS_THROTTLE_MS = 1000; // Wait longer for watched indicators to load
-let domMutationsAreThrottled = false;
-let hasUnseenDomMutations = false;
+/**
+ * YouTube Thumbnail Rating Bar - Content Script
+ * 
+ * Core Implementation Notes:
+ * - Uses debounced mutation observer to detect new thumbnails (avoid excessive API calls)
+ * - Tracks processed videos by ID to prevent duplicate processing
+ * - Sorts search results by score (regular videos only, excludes shorts)
+ * - Identifies highest scoring unWatched video for "scroll to best" feature
+ * - Supports both rating bars and text percentages based on user settings
+ */
+
+// Simple debounce for DOM mutations
+let mutationTimeout;
 
 const WATCHED_THUMBNAIL_SELECTOR =
   '.ytThumbnailOverlayProgressBarHostWatchedProgressBarSegment, ytd-thumbnail-overlay-resume-playback-renderer';
@@ -40,8 +49,6 @@ const API_RETRY_UNIFORM_DISTRIBUTION_WIDTH_MS = 3000;
 let isPendingApiRetry = false;
 let thumbnailsToRetry = [];
 
-// Used for marking thumbnails as processed.
-const PROCESSED_DATA_ATTRIBUTE_NAME = "data-ytrb-processed";
 
 // Whether we are currently viewing the mobile version of the YouTube website.
 const IS_MOBILE_SITE = window.location.href.startsWith("https://m.youtube.com");
@@ -62,12 +69,12 @@ let needsSort = false; // Track if sorting is needed
 
 // Cache selectors for better performance
 const THUMBNAIL_SELECTORS = [
-  'a#thumbnail[href*="/watch?v="]:not([data-ytrb-processed])',
-  'a#thumbnail[href*="/live/"]:not([data-ytrb-processed])',
-  'a.yt-lockup-view-model__content-image[href*="/watch?v="]:not([data-ytrb-processed])',
-  'a.yt-lockup-view-model__content-image[href*="/live/"]:not([data-ytrb-processed])',
-  'a.shortsLockupViewModelHostEndpoint[href*="/shorts/"]:not([data-ytrb-processed])',
-  'a.ytp-videowall-still[href]:not([data-ytrb-processed])'
+  'a#thumbnail[href*="/watch?v="]',
+  'a#thumbnail[href*="/live/"]',
+  'a.yt-lockup-view-model__content-image[href*="/watch?v="]',
+  'a.yt-lockup-view-model__content-image[href*="/live/"]',
+  'a.shortsLockupViewModelHostEndpoint[href*="/shorts/"]',
+  'a.ytp-videowall-still[href]'
 ];
 
 let addedFindBestThumbnailButton = false;
@@ -78,10 +85,13 @@ const isVideoWatched = (thumbnail) => {
   return !!container.querySelector(WATCHED_THUMBNAIL_SELECTOR);
 };
 
-// highest score on the page
+// Tracks highest score for "scroll to best" feature (excludes watched videos and shorts)
 let HIGHEST_SCORE = 0;
 
-// score algorithm
+/**
+ * Score algorithm: (likes - dislikes) * rating
+ * This gives higher weight to videos with both high like counts and good ratios
+ */
 const getScore = ({ likes, dislikes, rating }) => (likes - dislikes) * rating;
 
 let pageURL = document.location.href;
@@ -528,6 +538,13 @@ function addRatingPercentage(thumbnailElement, videoData) {
   }
 }
 
+/**
+ * Main thumbnail processing function
+ * - Finds all thumbnail links on the page using cached selectors
+ * - Extracts video IDs and skips already processed videos
+ * - Makes API calls for rating data and adds visual elements
+ * - Triggers immediate sorting on search pages for better UX
+ */
 function processNewThumbnails() {
   // Use cached selectors and combine results more efficiently
   const thumbnailLinks = [];
@@ -550,8 +567,6 @@ function processNewThumbnails() {
 
     const videoId = match[1];
     
-    link.setAttribute(PROCESSED_DATA_ATTRIBUTE_NAME, '');
-    
     // Skip if already processed this video ID
     if (processedVideoIds.has(videoId)) {
       continue;
@@ -568,9 +583,16 @@ function processNewThumbnails() {
         if (userSettings.showPercentage && videoData.rating != null && !(videoData.likes === 0 && videoData.dislikes >= 10)) {
           addRatingPercentage(link, videoData);
         }
+        
+        // Trigger sort immediately if on search page (50ms delay for DOM stability)
+        if (needsSort && window.location.href.includes('search')) {
+          setTimeout(() => {
+            sortThumbnails();
+            needsSort = false;
+          }, 50);
+        }
       }
     }).catch(() => {
-      link.removeAttribute(PROCESSED_DATA_ATTRIBUTE_NAME);
       processedVideoIds.delete(videoId);
     });
   }
@@ -642,60 +664,49 @@ function updateVideoRatingBar() {
 
 
 
-// Simple DOM mutation handler
+/**
+ * Debounced DOM mutation handler - the heart of the extension
+ * - Debounces frequent YouTube DOM changes to avoid excessive processing
+ * - Adds "scroll to best" button on video watch pages
+ * - Processes new thumbnails and updates existing rating bars
+ * - Handles page navigation cleanup and state reset
+ */
 function handleDomMutations() {
-  if (domMutationsAreThrottled) {
-    hasUnseenDomMutations = true;
-    return;
+  if (mutationTimeout) {
+    clearTimeout(mutationTimeout);
   }
-
-  domMutationsAreThrottled = true;
-
-  // Add "scroll to best" button on video pages
-  if (!addedFindBestThumbnailButton && document.querySelector('ytd-watch-next-secondary-results-renderer')) {
-    const button = document.createElement('button');
-    button.innerText = 'Scroll to best next video';
-    button.className = 'ytrb-find-best-thumbnail';
-    button.addEventListener('click', scrollToHighestScore);
-    
-    const related = document.querySelector('#related');
-    if (related) {
-      related.insertBefore(button, related.firstChild);
-    }
-    addedFindBestThumbnailButton = true;
-  }
-
-  // Process thumbnails
-  processNewThumbnails();
-  updateVideoRatingBar();
   
-  // Perform sort if needed (after processing is complete)
-  if (needsSort && window.location.href.includes('search')) {
-    setTimeout(() => {
-      sortThumbnails();
-      needsSort = false;
-    }, 500); // Small delay to ensure processing is complete
-  }
-
-  // Reset on page change
-  if (pageURL !== document.location.href) {
-    pageURL = document.location.href;
-    HIGHEST_SCORE = 0;
-    // Clean up data structures to prevent memory leaks
-    allThumbnails = [];
-    numberOfThumbnailProcessed = 0;
-    processedVideoIds.clear();
-    needsSort = false;
-    addedFindBestThumbnailButton = false;
-  }
-
-  setTimeout(() => {
-    domMutationsAreThrottled = false;
-    if (hasUnseenDomMutations) {
-      hasUnseenDomMutations = false;
-      handleDomMutations();
+  mutationTimeout = setTimeout(() => {
+    // Add "scroll to best" button on video pages
+    if (!addedFindBestThumbnailButton && document.querySelector('ytd-watch-next-secondary-results-renderer')) {
+      const related = document.querySelector('#related');
+      if (related && !related.querySelector('.ytrb-find-best-thumbnail')) {
+        const button = document.createElement('button');
+        button.innerText = 'Scroll to best next video';
+        button.className = 'ytrb-find-best-thumbnail';
+        button.addEventListener('click', scrollToHighestScore);
+        related.insertBefore(button, related.firstChild);
+      }
+      addedFindBestThumbnailButton = true;
     }
-  }, HANDLE_DOM_MUTATIONS_THROTTLE_MS);
+
+    // Process thumbnails
+    processNewThumbnails();
+    updateVideoRatingBar();
+    
+
+    // Reset on page change
+    if (pageURL !== document.location.href) {
+      pageURL = document.location.href;
+      HIGHEST_SCORE = 0;
+      // Clean up data structures to prevent memory leaks
+      allThumbnails = [];
+      numberOfThumbnailProcessed = 0;
+      processedVideoIds.clear();
+      needsSort = false;
+      addedFindBestThumbnailButton = false;
+    }
+  }, 1000);
 }
 
 
@@ -706,31 +717,8 @@ function periodicThumbnailCheck() {
   setTimeout(periodicThumbnailCheck, 5000);
 }
 
-const delayedStart = () => {
-  const promise1 = new Promise((resolve) => {
-    const interval = setInterval(() => {
-      if (document.location.href.includes('search')) {
-        if (document.querySelector(WATCHED_THUMBNAIL_SELECTOR)) {
-          clearInterval(interval);
-          resolve();
-        }
-      } else {
-        clearInterval(interval);
-        resolve();
-      }
-    }, 300);
-  });
-  const promise2 = new Promise((resolve) => setTimeout(resolve, 3000, 'slow'));
-
-  Promise.any([promise1, promise2]).then(() => {
-    handleDomMutations();
-    // Start periodic checking as backup
-    setTimeout(periodicThumbnailCheck, 2000);
-  });
-};
-
 // Simple mutation observer
-const mutationObserver = new MutationObserver(delayedStart);
+const mutationObserver = new MutationObserver(handleDomMutations);
 
 function insertCss(url) {
   chrome.runtime.sendMessage({
