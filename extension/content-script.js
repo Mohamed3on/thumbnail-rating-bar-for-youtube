@@ -1,6 +1,6 @@
 /**
  * YouTube Thumbnail Rating Bar - Content Script
- * 
+ *
  * Core Implementation Notes:
  * - Uses debounced mutation observer to detect new thumbnails (avoid excessive API calls)
  * - Tracks processed videos by ID to prevent duplicate processing
@@ -18,7 +18,7 @@ const WATCHED_THUMBNAIL_SELECTOR =
 // Function to scroll to highest score video
 const scrollToHighestScore = () => {
   let element = document.querySelector('#highest-score');
-  
+
   if (element) {
     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
   } else {
@@ -47,38 +47,35 @@ const MAX_API_RETRIES_PER_THUMBNAIL = 10;
 const API_RETRY_DELAY_MIN_MS = 3000;
 const API_RETRY_UNIFORM_DISTRIBUTION_WIDTH_MS = 3000;
 
-
 // Whether we are currently viewing the mobile version of the YouTube website.
-const IS_MOBILE_SITE = window.location.href.startsWith("https://m.youtube.com");
-const IS_YOUTUBE_KIDS_SITE = window.location.href.startsWith(
-  "https://www.youtubekids.com",
-);
+const IS_MOBILE_SITE = window.location.href.startsWith('https://m.youtube.com');
+const IS_YOUTUBE_KIDS_SITE = window.location.href.startsWith('https://www.youtubekids.com');
 
 // Whether the site is currently using the dark theme.
 const IS_USING_DARK_THEME =
-  getComputedStyle(document.body).getPropertyValue(
-    "--yt-spec-general-background-a",
-  ) === " #181818";
+  getComputedStyle(document.body).getPropertyValue('--yt-spec-general-background-a') === ' #181818';
 
 let allThumbnails = [];
 let processedVideoIds = new Set(); // Cache to prevent reprocessing
 let needsSort = false; // Track if sorting is needed
 
-// Cache selectors for better performance
-const THUMBNAIL_SELECTORS = [
+// Combined selector for better performance - single querySelectorAll call
+const THUMBNAIL_SELECTOR = [
   'a#thumbnail[href*="/watch?v="]',
   'a#thumbnail[href*="/live/"]',
   'a.yt-lockup-view-model__content-image[href*="/watch?v="]',
   'a.yt-lockup-view-model__content-image[href*="/live/"]',
   'a.shortsLockupViewModelHostEndpoint[href*="/shorts/"]',
-  'a.ytp-videowall-still[href]'
-];
+  'a.ytp-videowall-still[href]',
+].join(',');
 
 let addedFindBestThumbnailButton = false;
 
 const isVideoWatched = (thumbnail) => {
   // Look for watched indicators in the thumbnail or its closest container
-  const container = thumbnail.closest('ytd-rich-grid-media, ytd-video-renderer, .yt-lockup-view-model-wiz') || thumbnail;
+  const container =
+    thumbnail.closest('ytd-rich-grid-media, ytd-video-renderer, .yt-lockup-view-model-wiz') ||
+    thumbnail;
   return !!container.querySelector(WATCHED_THUMBNAIL_SELECTOR);
 };
 
@@ -117,7 +114,7 @@ function sleep(ms) {
 function ratingToPercentageString(rating) {
   // When the rating is 100%, we display "100%" instead of "100.0%".
   if (rating === 1) {
-    return (100).toLocaleString() + "%";
+    return (100).toLocaleString() + '%';
   }
   // We use floor instead of round to ensure that anything lower than
   // 100% does not display "100.0%".
@@ -125,20 +122,20 @@ function ratingToPercentageString(rating) {
     (Math.floor(rating * 1000) / 10).toLocaleString(undefined, {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
-    }) + "%"
+    }) + '%'
   );
 }
 
 function getToolTipHtml(videoData) {
   return (
     videoData.likes.toLocaleString() +
-    "&nbsp;/&nbsp;" +
+    '&nbsp;/&nbsp;' +
     videoData.dislikes.toLocaleString() +
-    " &nbsp;&nbsp; " +
+    ' &nbsp;&nbsp; ' +
     ratingToPercentageString(videoData.rating) +
-    " &nbsp;&nbsp; " +
+    ' &nbsp;&nbsp; ' +
     videoData.total.toLocaleString() +
-    "&nbsp;total"
+    '&nbsp;total'
   );
 }
 
@@ -147,33 +144,29 @@ function exponentialRatingWidthPercentage(rating) {
 }
 
 function getRatingScoreElement({ score, watched, isShort }) {
-  let isHighestScore = false;
+  const scoreElement = document.createElement('ytrb-score-bar');
 
-  // Don't count shorts as highest score candidates
-  if (score > HIGHEST_SCORE && !watched && !isShort) {
-    console.log('New highest score (regular video):', score);
-    HIGHEST_SCORE = score;
-    const previousHighestScore = document.getElementById('highest-score');
-    if (previousHighestScore) {
-      previousHighestScore.removeAttribute('id');
+  // Efficiently handle highest score tracking during creation
+  if (!watched && !isShort && score > HIGHEST_SCORE) {
+    // Remove previous highest score ID
+    const previousHighest = document.getElementById('highest-score');
+    if (previousHighest) {
+      previousHighest.removeAttribute('id');
     }
-    isHighestScore = true;
-  } else if (isShort && score > HIGHEST_SCORE) {
-    console.log('Short with high score detected but excluded:', score);
-  }
-  
-  const scoreElement = document.createElement("ytrb-score-bar");
-  if (isHighestScore) {
+
+    HIGHEST_SCORE = score;
     scoreElement.id = 'highest-score';
+    console.log('New highest score:', score);
   } else if (watched) {
     scoreElement.id = 'watched';
   }
+
   scoreElement.textContent = score.toLocaleString();
   return scoreElement;
 }
 
 function getRatingBarElement(videoData) {
-  const barElement = document.createElement("ytrb-bar");
+  const barElement = document.createElement('ytrb-bar');
 
   if (userSettings.barOpacity !== 100) {
     barElement.style.opacity = (userSettings.barOpacity / 100).toString();
@@ -181,18 +174,18 @@ function getRatingBarElement(videoData) {
 
   let ratingElement;
   if (videoData.rating == null) {
-    ratingElement = document.createElement("ytrb-no-rating");
+    ratingElement = document.createElement('ytrb-no-rating');
   } else {
     const likesWidthPercentage = userSettings.useExponentialScaling
       ? exponentialRatingWidthPercentage(videoData.rating)
       : 100 * videoData.rating;
 
-    ratingElement = document.createElement("ytrb-rating");
+    ratingElement = document.createElement('ytrb-rating');
 
-    const likesElement = document.createElement("ytrb-likes");
+    const likesElement = document.createElement('ytrb-likes');
     likesElement.style.width = `${likesWidthPercentage}%`;
 
-    const dislikesElement = document.createElement("ytrb-dislikes");
+    const dislikesElement = document.createElement('ytrb-dislikes');
 
     ratingElement.appendChild(likesElement);
     ratingElement.appendChild(dislikesElement);
@@ -201,8 +194,8 @@ function getRatingBarElement(videoData) {
   barElement.appendChild(ratingElement);
 
   if (userSettings.barTooltip) {
-    const tooltipElement = document.createElement("ytrb-tooltip");
-    const divElement = document.createElement("div");
+    const tooltipElement = document.createElement('ytrb-tooltip');
+    const divElement = document.createElement('div');
     divElement.innerHTML = getToolTipHtml(videoData);
     tooltipElement.appendChild(divElement);
     barElement.appendChild(tooltipElement);
@@ -212,12 +205,10 @@ function getRatingBarElement(videoData) {
 }
 
 function getRatingPercentageElement(videoData) {
-  const span = document.createElement("span");
-  span.role = "text";
+  const span = document.createElement('span');
+  span.role = 'text';
 
-  const ratingTextNode = document.createTextNode(
-    ratingToPercentageString(videoData.rating),
-  );
+  const ratingTextNode = document.createTextNode(ratingToPercentageString(videoData.rating));
 
   if (videoData.likes === 0) {
     // Don't colorize the text percentage for videos with 0 likes, since that
@@ -227,7 +218,7 @@ function getRatingPercentageElement(videoData) {
     span.appendChild(ratingTextNode);
   } else {
     // Create inner span for colorized text.
-    const innerSpan = document.createElement("span");
+    const innerSpan = document.createElement('span');
 
     // Calculate the color based on the rating.
     const r = Math.round((1 - videoData.rating) * 1275);
@@ -238,14 +229,13 @@ function getRatingPercentageElement(videoData) {
 
     // Apply the color to the inner span and add the text.
     const color = `rgb(${r},${Math.round(g)},0)`;
-    innerSpan.style.setProperty("color", color, "important");
+    innerSpan.style.setProperty('color', color, 'important');
     innerSpan.appendChild(ratingTextNode);
     span.appendChild(innerSpan);
   }
 
   return span;
 }
-
 
 // Function to detect if a thumbnail is for a YouTube Short
 function isShortVideo(thumbnailElement) {
@@ -254,7 +244,7 @@ function isShortVideo(thumbnailElement) {
   if (linkElement) {
     return true;
   }
-  
+
   // Check for shorts-specific classes or containers
   const shortsContainer = thumbnailElement.closest(
     'ytd-reel-item-renderer, ytd-shorts-lockup-view-model, ytm-shorts-lockup-view-model, .shortsLockupViewModelHostEndpoint'
@@ -262,7 +252,7 @@ function isShortVideo(thumbnailElement) {
   if (shortsContainer) {
     return true;
   }
-  
+
   // Additional check for elements with shortsLockupViewModelHost in their classes
   const elementWithShortsClass = thumbnailElement.closest('[class*="shortsLockupViewModelHost"]');
   return !!elementWithShortsClass;
@@ -275,7 +265,9 @@ function addRatingBar(thumbnailElement, videoData) {
   let targetContainer = thumbnailElement.closest('yt-thumbnail-view-model');
   if (!targetContainer) {
     // Fallback to the link container or parent
-    targetContainer = thumbnailElement.closest('a#thumbnail, a.yt-lockup-view-model__content-image');
+    targetContainer = thumbnailElement.closest(
+      'a#thumbnail, a.yt-lockup-view-model__content-image'
+    );
     if (!targetContainer) {
       targetContainer = thumbnailElement.parentElement;
     }
@@ -296,12 +288,9 @@ function addRatingBar(thumbnailElement, videoData) {
 
     // don't add rating bar to playlists as they're not actual videos
     if (!isPlaylist) {
-      // Debug logging
-      if (isShort) {
-        console.log('Detected short video, score:', videoData.score);
-      }
-      
-      targetContainer.appendChild(getRatingScoreElement({ score: videoData.score, watched, isShort }));
+      targetContainer.appendChild(
+        getRatingScoreElement({ score: videoData.score, watched, isShort })
+      );
       targetContainer.appendChild(getRatingBarElement(videoData));
 
       allThumbnails.push({
@@ -329,7 +318,7 @@ function getVideoDataObject(likes, dislikes) {
 async function getVideoDataFromApi(videoId) {
   for (let i = 0; i <= MAX_API_RETRIES_PER_THUMBNAIL; i++) {
     let likesData = await chrome.runtime.sendMessage({
-      query: "getLikesData",
+      query: 'getLikesData',
       videoId: videoId,
     });
 
@@ -337,16 +326,13 @@ async function getVideoDataFromApi(videoId) {
       return getVideoDataObject(likesData.likes, likesData.dislikes);
     }
 
-    await sleep(
-      API_RETRY_DELAY_MIN_MS +
-        Math.random() * API_RETRY_UNIFORM_DISTRIBUTION_WIDTH_MS,
-    );
+    await sleep(API_RETRY_DELAY_MIN_MS + Math.random() * API_RETRY_UNIFORM_DISTRIBUTION_WIDTH_MS);
   }
   return null;
 }
 
 function removeOldPercentages(element) {
-  element.querySelectorAll(".ytrb-percentage").forEach((oldPercentage) => {
+  element.querySelectorAll('.ytrb-percentage').forEach((oldPercentage) => {
     oldPercentage.remove();
   });
 }
@@ -360,9 +346,9 @@ function removeOldPercentages(element) {
 const METADATA_LINE_DATA_DESKTOP = [
   // - Homepage videos
   [
-    "ytd-rich-grid-media",
-    "#metadata-line",
-    "style-scope ytd-video-meta-block ytd-grid-video-renderer",
+    'ytd-rich-grid-media',
+    '#metadata-line',
+    'style-scope ytd-video-meta-block ytd-grid-video-renderer',
   ],
   // - Search result videos
   // - Search result Shorts listed individually
@@ -370,86 +356,74 @@ const METADATA_LINE_DATA_DESKTOP = [
     // The `div.` is required for the playlist page small thumbnails because
     // they have a closer `ytd-thumbnail` element that also has the
     // "ytd-playlist-video-renderer" class.
-    "ytd-video-renderer",
-    "#metadata-line",
-    "inline-metadata-item style-scope ytd-video-meta-block",
+    'ytd-video-renderer',
+    '#metadata-line',
+    'inline-metadata-item style-scope ytd-video-meta-block',
   ],
   // - Search result Shorts in horizontal carousel
   [
-    "ytm-shorts-lockup-view-model",
-    ".shortsLockupViewModelHostMetadataSubhead",
-    "yt-core-attributed-string yt-core-attributed-string--white-space-pre-wrap",
+    'ytm-shorts-lockup-view-model',
+    '.shortsLockupViewModelHostMetadataSubhead',
+    'yt-core-attributed-string yt-core-attributed-string--white-space-pre-wrap',
   ],
   // - Subscriptions page videos
   [
-    ".yt-lockup-view-model-wiz",
-    ".yt-content-metadata-view-model-wiz__metadata-row:last-child",
-    "yt-core-attributed-string yt-content-metadata-view-model-wiz__metadata-text yt-core-attributed-string--white-space-pre-wrap yt-core-attributed-string--link-inherit-color",
+    '.yt-lockup-view-model-wiz',
+    '.yt-content-metadata-view-model-wiz__metadata-row:last-child',
+    'yt-core-attributed-string yt-content-metadata-view-model-wiz__metadata-text yt-core-attributed-string--white-space-pre-wrap yt-core-attributed-string--link-inherit-color',
   ],
   // - Playlist page small thumbnails
   [
     // The `div.` part is required because there is a closer `ytd-thumbnail`
     // element that also has the "ytd-playlist-video-renderer" class.
-    "div.ytd-playlist-video-renderer",
-    "#metadata-line",
-    "style-scope ytd-video-meta-block",
+    'div.ytd-playlist-video-renderer',
+    '#metadata-line',
+    'style-scope ytd-video-meta-block',
   ],
   // - Movies page movies
-  ["ytd-grid-movie-renderer", ".grid-movie-renderer-metadata", ""],
+  ['ytd-grid-movie-renderer', '.grid-movie-renderer-metadata', ''],
   // - Your Courses page playlist
-  [
-    "ytd-grid-movie-renderer",
-    "#byline-container",
-    "style-scope ytd-video-meta-block",
-  ],
+  ['ytd-grid-movie-renderer', '#byline-container', 'style-scope ytd-video-meta-block'],
   // - Your Clips page clips
   [
     // The `div.` part is required because there is a closer `ytd-thumbnail`
     // element that also has the "ytd-playlist-video-renderer" class.
-    "div.ytd-grid-video-renderer",
-    "#metadata-line",
-    "style-scope ytd-grid-video-renderer",
+    'div.ytd-grid-video-renderer',
+    '#metadata-line',
+    'style-scope ytd-grid-video-renderer',
   ],
   // - Home page sponsored video version 1
-  [
-    "ytd-promoted-video-renderer",
-    "#metadata-line",
-    "style-scope ytd-video-meta-block",
-  ],
+  ['ytd-promoted-video-renderer', '#metadata-line', 'style-scope ytd-video-meta-block'],
   // - Home page sponsored video version 2
   [
-    ".ytd-video-display-full-buttoned-and-button-group-renderer",
-    "#byline-container",
-    "style-scope ytd-ad-inline-playback-meta-block yt-simple-endpoint",
+    '.ytd-video-display-full-buttoned-and-button-group-renderer',
+    '#byline-container',
+    'style-scope ytd-ad-inline-playback-meta-block yt-simple-endpoint',
   ],
   // - YouTube Music (music.youtube.com) home page videos
   [
-    "ytmusic-two-row-item-renderer",
-    "yt-formatted-string.subtitle",
-    "style-scope yt-formatted-string",
+    'ytmusic-two-row-item-renderer',
+    'yt-formatted-string.subtitle',
+    'style-scope yt-formatted-string',
   ],
 ];
 const METADATA_LINE_DATA_MOBILE = [
   // Homepage videos
   [
-    "ytm-media-item",
-    "ytm-badge-and-byline-renderer",
-    "ytm-badge-and-byline-item-byline small-text",
+    'ytm-media-item',
+    'ytm-badge-and-byline-renderer',
+    'ytm-badge-and-byline-item-byline small-text',
   ],
   // Subscriptions page Shorts in horizontal carousel
   [
-    ".shortsLockupViewModelHostEndpoint",
-    ".shortsLockupViewModelHostMetadataSubhead",
-    "yt-core-attributed-string yt-core-attributed-string--white-space-pre-wrap",
+    '.shortsLockupViewModelHostEndpoint',
+    '.shortsLockupViewModelHostMetadataSubhead',
+    'yt-core-attributed-string yt-core-attributed-string--white-space-pre-wrap',
   ],
   // Profile page History videos in horizontal carousel
-  [
-    "ytm-video-card-renderer",
-    ".subhead .small-text:last-child",
-    "yt-core-attributed-string",
-  ],
+  ['ytm-video-card-renderer', '.subhead .small-text:last-child', 'yt-core-attributed-string'],
   // Profile my videos
-  [".compact-media-item", ".subhead", "compact-media-item-stats small-text"],
+  ['.compact-media-item', '.subhead', 'compact-media-item-stats small-text'],
 ];
 
 const getFullThumbnail = (thumbnail) =>
@@ -495,8 +469,6 @@ const sortThumbnails = () => {
   content.replaceWith(newContent);
 };
 
-
-
 // Adds the rating text percentage below or next to the thumbnail in the video
 // metadata line.
 function addRatingPercentage(thumbnailElement, videoData) {
@@ -519,8 +491,7 @@ function addRatingPercentage(thumbnailElement, videoData) {
         // as the other metadata line items in the metadata line, plus
         // "ytrb-percentage".
         const ratingPercentageElement = getRatingPercentageElement(videoData);
-        ratingPercentageElement.className =
-          metadataLineItemClasses + " ytrb-percentage";
+        ratingPercentageElement.className = metadataLineItemClasses + ' ytrb-percentage';
 
         // Append the rating percentage element to the end of the metadata line.
         metadataLine.appendChild(ratingPercentageElement);
@@ -539,15 +510,16 @@ function addRatingPercentage(thumbnailElement, videoData) {
  * - Triggers immediate sorting on search pages for better UX
  */
 function processNewThumbnails() {
-  // Use cached selectors and combine results more efficiently
-  const thumbnailLinks = [];
-  for (const selector of THUMBNAIL_SELECTORS) {
-    thumbnailLinks.push(...document.querySelectorAll(selector));
-  }
+  // Single querySelectorAll with combined selector - much more efficient
+  const thumbnailLinks = document.querySelectorAll(THUMBNAIL_SELECTOR);
 
   for (const link of thumbnailLinks) {
     // Skip mix recommendations and playlists
-    if (link.closest('yt-collections-stack, ytd-thumbnail-overlay-side-panel-renderer, ytd-thumbnail-overlay-bottom-panel-renderer')) {
+    if (
+      link.closest(
+        'yt-collections-stack, ytd-thumbnail-overlay-side-panel-renderer, ytd-thumbnail-overlay-bottom-panel-renderer'
+      )
+    ) {
       continue;
     }
 
@@ -555,39 +527,48 @@ function processNewThumbnails() {
     if (!href) continue;
 
     // Extract video ID
-    const match = href.match(/.*[?&]v=([^&]+).*/) || href.match(/^\/shorts\/(.+)$/) || href.match(/^\/live\/([^?&]+)/);
+    const match =
+      href.match(/.*[?&]v=([^&]+).*/) ||
+      href.match(/^\/shorts\/(.+)$/) ||
+      href.match(/^\/live\/([^?&]+)/);
     if (!match) continue;
 
     const videoId = match[1];
-    
+
     // Skip if already processed this video ID
     if (processedVideoIds.has(videoId)) {
       continue;
     }
-    
+
     processedVideoIds.add(videoId);
 
     // Get video data and add rating elements
-    getVideoDataFromApi(videoId).then(videoData => {
-      if (videoData) {
-        if (userSettings.barHeight !== 0) {
-          addRatingBar(link, videoData);
+    getVideoDataFromApi(videoId)
+      .then((videoData) => {
+        if (videoData) {
+          if (userSettings.barHeight !== 0) {
+            addRatingBar(link, videoData);
+          }
+          if (
+            userSettings.showPercentage &&
+            videoData.rating != null &&
+            !(videoData.likes === 0 && videoData.dislikes >= 10)
+          ) {
+            addRatingPercentage(link, videoData);
+          }
+
+          // Trigger sort immediately if on search page (50ms delay for DOM stability)
+          if (needsSort && window.location.href.includes('search')) {
+            setTimeout(() => {
+              sortThumbnails();
+              needsSort = false;
+            }, 50);
+          }
         }
-        if (userSettings.showPercentage && videoData.rating != null && !(videoData.likes === 0 && videoData.dislikes >= 10)) {
-          addRatingPercentage(link, videoData);
-        }
-        
-        // Trigger sort immediately if on search page (50ms delay for DOM stability)
-        if (needsSort && window.location.href.includes('search')) {
-          setTimeout(() => {
-            sortThumbnails();
-            needsSort = false;
-          }, 50);
-        }
-      }
-    }).catch(() => {
-      processedVideoIds.delete(videoId);
-    });
+      })
+      .catch(() => {
+        processedVideoIds.delete(videoId);
+      });
   }
 
   // Mark that sorting is needed for search pages
@@ -599,7 +580,7 @@ function processNewThumbnails() {
 function parseInternationalInt(string) {
   // Parse an integer that may contain commas or other locale-specific
   // formatting.
-  return parseInt(string.replace(/[^\d]/g, ""), 10);
+  return parseInt(string.replace(/[^\d]/g, ''), 10);
 }
 
 // This function parses the Return YouTube Dislike tooltip text (see:
@@ -622,15 +603,15 @@ function getVideoDataFromTooltipText(text) {
 }
 
 function updateVideoRatingBar() {
-  for (const rydTooltip of document.querySelectorAll(".ryd-tooltip")) {
-    const tooltip = rydTooltip.querySelector("#tooltip");
+  for (const rydTooltip of document.querySelectorAll('.ryd-tooltip')) {
+    const tooltip = rydTooltip.querySelector('#tooltip');
     if (!tooltip) continue;
 
     const curText = tooltip.textContent;
 
     // We add a zero-width space to the end of any processed tooltip text to
     // prevent it from being reprocessed.
-    if (!curText.endsWith("\u200b")) {
+    if (!curText.endsWith('\u200b')) {
       const videoData = getVideoDataFromTooltipText(curText);
       if (!videoData) continue;
 
@@ -644,18 +625,14 @@ function updateVideoRatingBar() {
       }
 
       if (userSettings.useExponentialScaling && videoData.rating) {
-        const rydBar = rydTooltip.querySelector("#ryd-bar");
+        const rydBar = rydTooltip.querySelector('#ryd-bar');
         if (rydBar) {
-          rydBar.style.width = `${exponentialRatingWidthPercentage(
-            videoData.rating,
-          )}%`;
+          rydBar.style.width = `${exponentialRatingWidthPercentage(videoData.rating)}%`;
         }
       }
     }
   }
 }
-
-
 
 /**
  * Debounced DOM mutation handler - the heart of the extension
@@ -668,10 +645,13 @@ function handleDomMutations() {
   if (mutationTimeout) {
     clearTimeout(mutationTimeout);
   }
-  
+
   mutationTimeout = setTimeout(() => {
     // Add "scroll to best" button on video pages
-    if (!addedFindBestThumbnailButton && document.querySelector('ytd-watch-next-secondary-results-renderer')) {
+    if (
+      !addedFindBestThumbnailButton &&
+      document.querySelector('ytd-watch-next-secondary-results-renderer')
+    ) {
       const related = document.querySelector('#related');
       if (related && !related.querySelector('.ytrb-find-best-thumbnail')) {
         const button = document.createElement('button');
@@ -686,7 +666,6 @@ function handleDomMutations() {
     // Process thumbnails
     processNewThumbnails();
     updateVideoRatingBar();
-    
 
     // Reset on page change
     if (pageURL !== document.location.href) {
@@ -700,8 +679,6 @@ function handleDomMutations() {
     }
   }, 1000);
 }
-
-
 
 // Simple mutation observer
 const mutationObserver = new MutationObserver(handleDomMutations);
@@ -798,15 +775,13 @@ chrome.storage.sync.get(DEFAULT_USER_SETTINGS, function (storedSettings) {
   }
 
   // Standard mutation observation for thumbnail detection
-  mutationObserver.observe(document.body, { 
-    childList: true, 
-    subtree: true
+  mutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
   });
-  
-  
+
   // Initial thumbnail processing
   processNewThumbnails();
   updateVideoRatingBar();
   setTimeout(() => processNewThumbnails(), 1000);
-  
 });
