@@ -259,7 +259,7 @@ function isShortVideo(thumbnailElement) {
 }
 
 // Adds the rating bar after the thumbnail img tag.
-function addRatingBar(thumbnailElement, videoData) {
+function addRatingBar(thumbnailElement, videoData, videoId) {
   // Find the appropriate container for the rating bar
   // For modern YouTube, we want to add it to the yt-thumbnail-view-model or a#thumbnail
   let targetContainer = thumbnailElement.closest('yt-thumbnail-view-model');
@@ -288,10 +288,20 @@ function addRatingBar(thumbnailElement, videoData) {
 
     // don't add rating bar to playlists as they're not actual videos
     if (!isPlaylist) {
+      // IMPORTANT: Remove any existing rating elements to prevent duplicates
+      // This handles both:
+      // 1. Duplicate processing of the same video
+      // 2. DOM element reuse when YouTube reuses thumbnail elements for different videos
+      targetContainer.querySelectorAll('ytrb-score-bar, ytrb-bar').forEach(el => el.remove());
+
       targetContainer.appendChild(
         getRatingScoreElement({ score: videoData.score, watched, isShort })
       );
       targetContainer.appendChild(getRatingBarElement(videoData));
+
+      // Track which video's rating this element is currently showing
+      // This allows detection of element reuse in future processing
+      targetContainer.dataset.ytrbVideoId = videoId;
 
       allThumbnails.push({
         thumbnail: targetContainer,
@@ -535,7 +545,22 @@ function processNewThumbnails() {
 
     const videoId = match[1];
 
-    // Skip if already processed this video ID
+    // Check if this element already has a rating for a video
+    // This dual tracking strategy ensures:
+    // 1. processedVideoIds prevents redundant API calls for the same video
+    // 2. data-ytrb-video-id detects when YouTube reuses DOM elements for different videos
+    const existingVideoId = link.dataset.ytrbVideoId;
+    if (existingVideoId === videoId) {
+      // This element already has the correct rating for this video
+      continue;
+    } else if (existingVideoId) {
+      // This element is being reused for a different video
+      // Remove old rating elements (they'll be re-added with correct data below)
+      link.querySelectorAll('ytrb-score-bar, ytrb-bar').forEach(el => el.remove());
+      delete link.dataset.ytrbVideoId;
+    }
+
+    // Skip if already processed this video ID (prevents duplicate API calls)
     if (processedVideoIds.has(videoId)) {
       continue;
     }
@@ -547,7 +572,7 @@ function processNewThumbnails() {
       .then((videoData) => {
         if (videoData) {
           if (userSettings.barHeight !== 0) {
-            addRatingBar(link, videoData);
+            addRatingBar(link, videoData, videoId);
           }
           if (
             userSettings.showPercentage &&
