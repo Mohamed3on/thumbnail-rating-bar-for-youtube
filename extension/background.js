@@ -1,5 +1,5 @@
-// Default cache duration: 1 day
-const DEFAULT_CACHE_DURATION = 24 * 60 * 60 * 1000;
+// Default cache duration: 1 hour
+const DEFAULT_CACHE_DURATION = 60 * 60 * 1000;
 
 // --- Helper Functions ---
 
