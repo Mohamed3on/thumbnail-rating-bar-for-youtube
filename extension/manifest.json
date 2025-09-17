@@ -35,7 +35,7 @@
     "*://*.returnyoutubedislikeapi.com/*",
     "https://www.googleapis.com/*"
   ],
-  "permissions": ["storage", "scripting"],
+  "permissions": ["storage", "scripting", "alarms"],
   "web_accessible_resources": [
     {
       "resources": [
