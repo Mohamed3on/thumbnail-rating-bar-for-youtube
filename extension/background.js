@@ -1,6 +1,3 @@
-// Default cache duration: 1 hour
-const DEFAULT_CACHE_DURATION = 60 * 60 * 1000;
-
 // --- Helper Functions ---
 
 async function getStorageData(keys) {
@@ -62,7 +59,7 @@ async function handleGetLikesData(videoId) {
   try {
     // Check cache
     const cached = await chrome.storage.local.get(videoId);
-    const { cacheDuration = DEFAULT_CACHE_DURATION } = await getStorageData('cacheDuration');
+    const { cacheDuration } = await getStorageData('cacheDuration');
     const now = Date.now();
 
     if (cached[videoId]?.timestamp && now - cached[videoId].timestamp <= cacheDuration) {
