@@ -55,9 +55,10 @@ const IS_YOUTUBE_KIDS_SITE = window.location.href.startsWith('https://www.youtub
 const IS_USING_DARK_THEME =
   getComputedStyle(document.body).getPropertyValue('--yt-spec-general-background-a') === ' #181818';
 
-let allThumbnails = [];
+const allThumbnails = new Map();
 let processedVideoIds = new Set(); // Cache to prevent reprocessing
 let needsSort = false; // Track if sorting is needed
+let sortScheduled = false; // Debounce sort scheduling
 
 // Combined selector for better performance - single querySelectorAll call
 const THUMBNAIL_SELECTOR = [
@@ -292,7 +293,7 @@ function addRatingBar(thumbnailElement, videoData, videoId) {
       // This handles both:
       // 1. Duplicate processing of the same video
       // 2. DOM element reuse when YouTube reuses thumbnail elements for different videos
-      targetContainer.querySelectorAll('ytrb-score-bar, ytrb-bar').forEach(el => el.remove());
+      targetContainer.querySelectorAll('ytrb-score-bar, ytrb-bar').forEach((el) => el.remove());
 
       targetContainer.appendChild(
         getRatingScoreElement({ score: videoData.score, watched, isShort })
@@ -303,12 +304,13 @@ function addRatingBar(thumbnailElement, videoData, videoId) {
       // This allows detection of element reuse in future processing
       targetContainer.dataset.ytrbVideoId = videoId;
 
-      allThumbnails.push({
-        thumbnail: targetContainer,
-        score: videoData.score,
-        watched,
-        isShort,
-      });
+      const fullThumbnail = getFullThumbnail(targetContainer);
+      if (fullThumbnail && isSearchPage()) {
+        allThumbnails.set(fullThumbnail, {
+          score: videoData.score,
+          isShort,
+        });
+      }
     }
   }
 }
@@ -439,6 +441,7 @@ const METADATA_LINE_DATA_MOBILE = [
 const getFullThumbnail = (thumbnail) =>
   thumbnail.closest(
     '.ytd-rich-item-renderer, ' + // Home page.
+      'ytd-video-renderer, ' + // Search page results.
       '.ytd-grid-renderer, ' + // Trending and subscriptions page.
       '.ytd-expanded-shelf-contents-renderer, ' + // Also subscriptions page.
       '.yt-horizontal-list-renderer, ' + // Channel page.
@@ -447,36 +450,106 @@ const getFullThumbnail = (thumbnail) =>
       '.ytd-playlist-video-list-renderer' // Playlist page.
   );
 
+const SEARCH_RESULTS_CONTAINER_SELECTORS = [
+  'ytd-two-column-search-results-renderer #primary ytd-section-list-renderer ytd-item-section-renderer > #contents.ytd-item-section-renderer',
+  'ytd-section-list-renderer ytd-item-section-renderer > #contents.ytd-item-section-renderer',
+  'ytd-item-section-renderer > #contents.ytd-item-section-renderer',
+  '#contents.ytd-item-section-renderer',
+];
+
+const isSearchPage = () => window.location.href.includes('search');
+
+const getPrimaryResultsContainer = () => {
+  for (const selector of SEARCH_RESULTS_CONTAINER_SELECTORS) {
+    const el = document.querySelector(selector);
+    if (el) {
+      return el;
+    }
+  }
+  return null;
+};
+
 const sortThumbnails = () => {
-  if (allThumbnails.length === 0) return;
+  if (!needsSort) {
+    return;
+  }
 
-  const t = allThumbnails[0].thumbnail;
-  let content = t.closest('#contents.ytd-item-section-renderer');
+  needsSort = false;
 
-  if (!content) return;
+  if (!isSearchPage()) {
+    return;
+  }
 
-  const newContent = document.createElement('div');
-  newContent.id = 'contents';
-  newContent.className = 'ytd-item-section-renderer';
+  const primaryContainer = getPrimaryResultsContainer();
+  if (!primaryContainer) {
+    return;
+  }
 
-  // Sort thumbnails by score, but keep shorts separate/at the end
-  allThumbnails.sort((a, b) => {
-    // If both are shorts or both are not shorts, sort by score
-    if ((a.isShort && b.isShort) || (!a.isShort && !b.isShort)) {
-      return b.score - a.score;
+  const sortableEntries = [];
+  allThumbnails.forEach((data, fullThumbnail) => {
+    if (!fullThumbnail || !fullThumbnail.isConnected) {
+      allThumbnails.delete(fullThumbnail);
+      return;
     }
-    // If one is a short and one isn't, prioritize non-shorts
-    return a.isShort ? 1 : -1;
+
+    if (fullThumbnail.closest('#contents.ytd-item-section-renderer') !== primaryContainer) {
+      allThumbnails.delete(fullThumbnail);
+      return;
+    }
+
+    sortableEntries.push({
+      fullThumbnail,
+      score: data.score,
+      isShort: data.isShort,
+    });
   });
 
-  allThumbnails.forEach(({ thumbnail }) => {
-    const fullThumbnail = getFullThumbnail(thumbnail);
-    if (fullThumbnail) {
-      newContent.appendChild(fullThumbnail);
+  if (sortableEntries.length === 0) {
+    return;
+  }
+
+  const sortedNodes = sortableEntries
+    .sort((a, b) => {
+      if ((a.isShort && b.isShort) || (!a.isShort && !b.isShort)) {
+        return b.score - a.score;
+      }
+      return a.isShort ? 1 : -1;
+    })
+    .map((entry) => entry.fullThumbnail);
+
+  const fragment = document.createDocumentFragment();
+  const sortedSet = new Set(sortedNodes);
+
+  sortedNodes.forEach((node) => {
+    fragment.appendChild(node);
+  });
+
+  Array.from(primaryContainer.children).forEach((child) => {
+    if (!sortedSet.has(child)) {
+      fragment.appendChild(child);
     }
   });
 
-  content.replaceWith(newContent);
+  primaryContainer.appendChild(fragment);
+};
+
+const scheduleSearchSort = () => {
+  if (!isSearchPage()) {
+    return;
+  }
+
+  needsSort = true;
+
+  if (sortScheduled) {
+    return;
+  }
+
+  sortScheduled = true;
+
+  setTimeout(() => {
+    sortScheduled = false;
+    sortThumbnails();
+  }, 50);
 };
 
 // Adds the rating text percentage below or next to the thumbnail in the video
@@ -556,7 +629,11 @@ function processNewThumbnails() {
     } else if (existingVideoId) {
       // This element is being reused for a different video
       // Remove old rating elements (they'll be re-added with correct data below)
-      link.querySelectorAll('ytrb-score-bar, ytrb-bar').forEach(el => el.remove());
+      link.querySelectorAll('ytrb-score-bar, ytrb-bar').forEach((el) => el.remove());
+      const reusedFullThumbnail = getFullThumbnail(link);
+      if (reusedFullThumbnail) {
+        allThumbnails.delete(reusedFullThumbnail);
+      }
       delete link.dataset.ytrbVideoId;
     }
 
@@ -582,13 +659,7 @@ function processNewThumbnails() {
             addRatingPercentage(link, videoData);
           }
 
-          // Trigger sort immediately if on search page (50ms delay for DOM stability)
-          if (needsSort && window.location.href.includes('search')) {
-            setTimeout(() => {
-              sortThumbnails();
-              needsSort = false;
-            }, 50);
-          }
+          scheduleSearchSort();
         }
       })
       .catch(() => {
@@ -596,9 +667,8 @@ function processNewThumbnails() {
       });
   }
 
-  // Mark that sorting is needed for search pages
-  if (window.location.href.includes('search')) {
-    needsSort = true;
+  if (isSearchPage()) {
+    scheduleSearchSort();
   }
 }
 
@@ -697,9 +767,10 @@ function handleDomMutations() {
       pageURL = document.location.href;
       HIGHEST_SCORE = 0;
       // Clean up data structures to prevent memory leaks
-      allThumbnails = [];
+      allThumbnails.clear();
       processedVideoIds.clear();
       needsSort = false;
+      sortScheduled = false;
       addedFindBestThumbnailButton = false;
     }
   }, 1000);
