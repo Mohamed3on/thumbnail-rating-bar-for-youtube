@@ -11,6 +11,7 @@
 
 // Simple debounce for DOM mutations
 let mutationTimeout;
+let highestScoreTimeout;
 
 const WATCHED_THUMBNAIL_SELECTOR =
   '.ytThumbnailOverlayProgressBarHostWatchedProgressBarSegment, ytd-thumbnail-overlay-resume-playback-renderer';
@@ -639,6 +640,7 @@ function processNewThumbnails() {
         if (videoData) {
           if (userSettings.barHeight !== 0) {
             addRatingBar(link, videoData, videoId);
+            scheduleHighestScoreUpdate();
           }
           if (
             userSettings.showPercentage &&
@@ -764,7 +766,7 @@ function handleDomMutations() {
     }
 
     updateHighestScoreMarker();
-  }, 1000);
+  }, 300);
 }
 
 function updateHighestScoreMarker() {
@@ -788,6 +790,13 @@ function updateHighestScoreMarker() {
     highestElement.id = 'highest-score';
     HIGHEST_SCORE = highestScore;
   }
+}
+
+function scheduleHighestScoreUpdate() {
+  if (highestScoreTimeout) {
+    clearTimeout(highestScoreTimeout);
+  }
+  highestScoreTimeout = setTimeout(updateHighestScoreMarker, 100);
 }
 
 // Simple mutation observer
