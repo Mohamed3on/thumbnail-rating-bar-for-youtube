@@ -146,23 +146,15 @@ function exponentialRatingWidthPercentage(rating) {
 
 function getRatingScoreElement({ score, watched, isShort }) {
   const scoreElement = document.createElement('ytrb-score-bar');
+  scoreElement.textContent = score.toLocaleString();
+  scoreElement.dataset.score = score;
+  scoreElement.dataset.watched = watched;
+  scoreElement.dataset.isShort = isShort;
 
-  // Efficiently handle highest score tracking during creation
-  if (!watched && !isShort && score > HIGHEST_SCORE) {
-    // Remove previous highest score ID
-    const previousHighest = document.getElementById('highest-score');
-    if (previousHighest) {
-      previousHighest.removeAttribute('id');
-    }
-
-    HIGHEST_SCORE = score;
-    scoreElement.id = 'highest-score';
-    console.log('New highest score:', score);
-  } else if (watched) {
+  if (watched) {
     scoreElement.id = 'watched';
   }
 
-  scoreElement.textContent = score.toLocaleString();
   return scoreElement;
 }
 
@@ -618,17 +610,14 @@ function processNewThumbnails() {
 
     const videoId = match[1];
 
-    // Check if this element already has a rating for a video
-    // This dual tracking strategy ensures:
-    // 1. processedVideoIds prevents redundant API calls for the same video
-    // 2. data-ytrb-video-id detects when YouTube reuses DOM elements for different videos
+    // Check if this element already has a rating for this exact video
     const existingVideoId = link.dataset.ytrbVideoId;
     if (existingVideoId === videoId) {
-      // This element already has the correct rating for this video
       continue;
-    } else if (existingVideoId) {
-      // This element is being reused for a different video
-      // Remove old rating elements (they'll be re-added with correct data below)
+    }
+
+    // Clean up if element is being reused for a different video
+    if (existingVideoId) {
       link.querySelectorAll('ytrb-score-bar, ytrb-bar').forEach((el) => el.remove());
       const reusedFullThumbnail = getFullThumbnail(link);
       if (reusedFullThumbnail) {
@@ -637,7 +626,7 @@ function processNewThumbnails() {
       delete link.dataset.ytrbVideoId;
     }
 
-    // Skip if already processed this video ID (prevents duplicate API calls)
+    // Skip API call if we've already processed this video ID
     if (processedVideoIds.has(videoId)) {
       continue;
     }
@@ -773,7 +762,32 @@ function handleDomMutations() {
       sortScheduled = false;
       addedFindBestThumbnailButton = false;
     }
+
+    updateHighestScoreMarker();
   }, 1000);
+}
+
+function updateHighestScoreMarker() {
+  let highestScore = 0;
+  let highestElement = null;
+
+  document.querySelectorAll('ytrb-score-bar[data-score]').forEach((scoreBar) => {
+    if (scoreBar.dataset.watched === 'true' || scoreBar.dataset.isShort === 'true') {
+      return;
+    }
+    const score = parseFloat(scoreBar.dataset.score);
+    if (score > highestScore) {
+      highestScore = score;
+      highestElement = scoreBar;
+    }
+  });
+
+  document.querySelectorAll('#highest-score').forEach((el) => el.removeAttribute('id'));
+
+  if (highestElement) {
+    highestElement.id = 'highest-score';
+    HIGHEST_SCORE = highestScore;
+  }
 }
 
 // Simple mutation observer
