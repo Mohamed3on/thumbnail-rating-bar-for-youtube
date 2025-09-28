@@ -57,9 +57,8 @@ const IS_USING_DARK_THEME =
   getComputedStyle(document.body).getPropertyValue('--yt-spec-general-background-a') === ' #181818';
 
 const allThumbnails = new Map();
-let processedVideoIds = new Set(); // Cache to prevent reprocessing
-let needsSort = false; // Track if sorting is needed
-let sortScheduled = false; // Debounce sort scheduling
+let processedVideoIds = new Set();
+let sortTimeout = null;
 
 // Combined selector for better performance - single querySelectorAll call
 const THUMBNAIL_SELECTOR = [
@@ -435,6 +434,7 @@ const getFullThumbnail = (thumbnail) =>
   thumbnail.closest(
     '.ytd-rich-item-renderer, ' + // Home page.
       'ytd-video-renderer, ' + // Search page results.
+      'ytd-grid-video-renderer, ' + // Search page shelf videos.
       '.ytd-grid-renderer, ' + // Trending and subscriptions page.
       '.ytd-expanded-shelf-contents-renderer, ' + // Also subscriptions page.
       '.yt-horizontal-list-renderer, ' + // Channel page.
@@ -463,86 +463,43 @@ const getPrimaryResultsContainer = () => {
 };
 
 const sortThumbnails = () => {
-  if (!needsSort) {
-    return;
-  }
+  if (!isSearchPage()) return;
 
-  needsSort = false;
-
-  if (!isSearchPage()) {
-    return;
-  }
-
-  const primaryContainer = getPrimaryResultsContainer();
-  if (!primaryContainer) {
-    return;
-  }
+  const sectionList = document.querySelector('div#primary ytd-section-list-renderer');
+  const mainContents = sectionList?.querySelector('ytd-item-section-renderer #contents');
+  if (!mainContents) return;
 
   const sortableEntries = [];
   allThumbnails.forEach((data, fullThumbnail) => {
-    if (!fullThumbnail || !fullThumbnail.isConnected) {
+    if (fullThumbnail?.isConnected && sectionList.contains(fullThumbnail)) {
+      sortableEntries.push({ fullThumbnail, score: data.score, isShort: data.isShort });
+    } else {
       allThumbnails.delete(fullThumbnail);
-      return;
     }
-
-    if (fullThumbnail.closest('#contents.ytd-item-section-renderer') !== primaryContainer) {
-      allThumbnails.delete(fullThumbnail);
-      return;
-    }
-
-    sortableEntries.push({
-      fullThumbnail,
-      score: data.score,
-      isShort: data.isShort,
-    });
   });
 
-  if (sortableEntries.length === 0) {
-    return;
-  }
+  if (!sortableEntries.length) return;
 
   const sortedNodes = sortableEntries
-    .sort((a, b) => {
-      if ((a.isShort && b.isShort) || (!a.isShort && !b.isShort)) {
-        return b.score - a.score;
-      }
-      return a.isShort ? 1 : -1;
-    })
-    .map((entry) => entry.fullThumbnail);
+    .sort((a, b) => (a.isShort === b.isShort ? b.score - a.score : a.isShort ? 1 : -1))
+    .map((e) => e.fullThumbnail);
 
   const fragment = document.createDocumentFragment();
-  const sortedSet = new Set(sortedNodes);
+  sortedNodes.forEach((node) => fragment.appendChild(node));
 
-  sortedNodes.forEach((node) => {
-    fragment.appendChild(node);
+  mainContents.innerHTML = '';
+  mainContents.appendChild(fragment);
+
+  sectionList.querySelectorAll('ytd-item-section-renderer').forEach((section, i) => {
+    if (i > 0) section.style.display = 'none';
   });
-
-  Array.from(primaryContainer.children).forEach((child) => {
-    if (!sortedSet.has(child)) {
-      fragment.appendChild(child);
-    }
-  });
-
-  primaryContainer.appendChild(fragment);
 };
 
 const scheduleSearchSort = () => {
-  if (!isSearchPage()) {
-    return;
-  }
+  if (!isSearchPage()) return;
 
-  needsSort = true;
-
-  if (sortScheduled) {
-    return;
-  }
-
-  sortScheduled = true;
-
-  setTimeout(() => {
-    sortScheduled = false;
-    sortThumbnails();
-  }, 50);
+  clearTimeout(sortTimeout);
+  sortTimeout = setTimeout(sortThumbnails, 50);
 };
 
 // Adds the rating text percentage below or next to the thumbnail in the video
@@ -753,15 +710,11 @@ function handleDomMutations() {
     processNewThumbnails();
     updateVideoRatingBar();
 
-    // Reset on page change
     if (pageURL !== document.location.href) {
       pageURL = document.location.href;
       HIGHEST_SCORE = 0;
-      // Clean up data structures to prevent memory leaks
       allThumbnails.clear();
       processedVideoIds.clear();
-      needsSort = false;
-      sortScheduled = false;
       addedFindBestThumbnailButton = false;
     }
 
