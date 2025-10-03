@@ -4,7 +4,7 @@
  * Core Implementation Notes:
  * - Uses debounced mutation observer to detect new thumbnails (avoid excessive API calls)
  * - Tracks processed videos by ID to prevent duplicate processing
- * - Sorts search results by score (regular videos only, excludes shorts)
+ * - Sorts search results by score (videos and shorts)
  * - Identifies highest scoring unWatched video for "scroll to best" feature
  * - Supports both rating bars and text percentages based on user settings
  */
@@ -440,6 +440,7 @@ const getFullThumbnail = (thumbnail) =>
       '.yt-horizontal-list-renderer, ' + // Channel page.
       '.ytd-item-section-renderer, ' + // History / Player page.
       '.ytd-horizontal-card-list-renderer, ' + // Gaming page.
+      '.ytGridShelfViewModelGridShelfItem, ' + // Mobile grid shelf items (e.g., Shorts tiles).
       '.ytd-playlist-video-list-renderer' // Playlist page.
   );
 
@@ -481,7 +482,7 @@ const sortThumbnails = () => {
   if (!sortableEntries.length) return;
 
   const sortedNodes = sortableEntries
-    .sort((a, b) => (a.isShort === b.isShort ? b.score - a.score : a.isShort ? 1 : -1))
+    .sort((a, b) => b.score - a.score)
     .map((e) => e.fullThumbnail);
 
   const fragment = document.createDocumentFragment();
