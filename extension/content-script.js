@@ -43,6 +43,66 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+const NOT_INTERESTED_KEYWORDS = ['not interested'];
+const MENU_ITEM_SELECTORS = [
+  'yt-list-item-view-model[role="menuitem"]',
+  'ytd-menu-service-item-renderer',
+].join(',');
+
+function isNotInterestedMenuItem(element) {
+  if (!element) {
+    return false;
+  }
+
+  const text = element.textContent;
+  if (!text) {
+    return false;
+  }
+
+  const normalizedText = text.replace(/\s+/g, ' ').trim().toLowerCase();
+  return NOT_INTERESTED_KEYWORDS.some((keyword) => normalizedText.includes(keyword));
+}
+
+// Recompute the highlighted video after a "Not interested" dismissal.
+function refreshHighestScoreAfterNotInterested() {
+  document.querySelectorAll('#highest-score').forEach((el) => el.removeAttribute('id'));
+  HIGHEST_SCORE = 0;
+
+  setTimeout(() => {
+    processNewThumbnails();
+    scheduleHighestScoreUpdate();
+  }, 500);
+}
+
+function handleMenuActivation(event) {
+  const menuItem = event.target.closest(MENU_ITEM_SELECTORS);
+  if (!menuItem) {
+    return;
+  }
+
+  if (!isNotInterestedMenuItem(menuItem)) {
+    return;
+  }
+
+  refreshHighestScoreAfterNotInterested();
+}
+
+// Attach menu listeners once per page lifetime to avoid duplicate handlers.
+if (!window.__ytrbNotInterestedListenerAttached) {
+  window.__ytrbNotInterestedListenerAttached = true;
+  document.addEventListener('click', handleMenuActivation, true);
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+      handleMenuActivation(event);
+    },
+    true
+  );
+}
+
 // Variables for handling what to do when an API request fails.
 const MAX_API_RETRIES_PER_THUMBNAIL = 10;
 const API_RETRY_DELAY_MIN_MS = 3000;
@@ -500,7 +560,7 @@ const scheduleSearchSort = () => {
   if (!isSearchPage()) return;
 
   clearTimeout(sortTimeout);
-  sortTimeout = setTimeout(sortThumbnails, 50);
+  sortTimeout = setTimeout(sortThumbnails, 1000);
 };
 
 // Adds the rating text percentage below or next to the thumbnail in the video
