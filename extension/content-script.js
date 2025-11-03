@@ -124,6 +124,7 @@ let sortTimeout = null;
 const THUMBNAIL_SELECTOR = [
   'a#thumbnail[href*="/watch?v="]',
   'a#thumbnail[href*="/live/"]',
+  'a#thumbnail[href*="/shorts/"]',
   'a.yt-lockup-view-model__content-image[href*="/watch?v="]',
   'a.yt-lockup-view-model__content-image[href*="/live/"]',
   'a.shortsLockupViewModelHostEndpoint[href*="/shorts/"]',
@@ -140,7 +141,7 @@ const isVideoWatched = (thumbnail) => {
   return !!container.querySelector(WATCHED_THUMBNAIL_SELECTOR);
 };
 
-// Tracks highest score for "scroll to best" feature (excludes watched videos and shorts)
+// Tracks highest score for "scroll to best" feature (excludes watched videos and shorts outside search pages)
 let HIGHEST_SCORE = 0;
 
 /**
@@ -541,9 +542,7 @@ const sortThumbnails = () => {
 
   if (!sortableEntries.length) return;
 
-  const sortedNodes = sortableEntries
-    .sort((a, b) => b.score - a.score)
-    .map((e) => e.fullThumbnail);
+  const sortedNodes = sortableEntries.sort((a, b) => b.score - a.score).map((e) => e.fullThumbnail);
 
   const fragment = document.createDocumentFragment();
   sortedNodes.forEach((node) => fragment.appendChild(node));
@@ -788,7 +787,11 @@ function updateHighestScoreMarker() {
   let highestElement = null;
 
   document.querySelectorAll('ytrb-score-bar[data-score]').forEach((scoreBar) => {
-    if (scoreBar.dataset.watched === 'true' || scoreBar.dataset.isShort === 'true') {
+    if (scoreBar.dataset.watched === 'true') {
+      return;
+    }
+    // Only exclude shorts when NOT on a search page
+    if (scoreBar.dataset.isShort === 'true' && !isSearchPage()) {
       return;
     }
     const score = parseFloat(scoreBar.dataset.score);
