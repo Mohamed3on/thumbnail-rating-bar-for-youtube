@@ -16,30 +16,63 @@ let highestScoreTimeout;
 const WATCHED_THUMBNAIL_SELECTOR =
   '.ytThumbnailOverlayProgressBarHostWatchedProgressBarSegment, ytd-thumbnail-overlay-resume-playback-renderer';
 
-// Function to scroll to highest score video
-const scrollToHighestScore = () => {
-  let element = document.querySelector('#highest-score');
+// Track current element in ranked video list for cycling
+let currentRankedElement = null;
 
-  if (element) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  } else {
-    // Process thumbnails and try again after a brief delay
+// Get all scored videos sorted by score descending, excluding watched
+const getRankedVideos = () => {
+  const scoreBars = Array.from(document.querySelectorAll('ytrb-score-bar[data-score]'));
+  const isSearch = window.location.href.includes('search');
+  return scoreBars
+    .filter((el) => {
+      if (el.dataset.watched === 'true') return false;
+      if (el.dataset.isShort === 'true' && !isSearch) return false;
+      return true;
+    })
+    .sort((a, b) => parseFloat(b.dataset.score) - parseFloat(a.dataset.score));
+};
+
+// Scroll to video at given rank index (0 = best, 1 = 2nd best, etc.)
+const scrollToRankedVideo = (direction) => {
+  const ranked = getRankedVideos();
+  if (!ranked.length) {
     processNewThumbnails();
-    setTimeout(() => {
-      element = document.querySelector('#highest-score');
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 1000);
+    return;
   }
+
+  // Find where current element is in the sorted list (-1 if gone/null)
+  let idx = currentRankedElement?.isConnected ? ranked.indexOf(currentRankedElement) : -1;
+
+  // Calculate new index, clamped to bounds (no wrap-around)
+  idx = direction === 'forward' ? Math.min(idx + 1, ranked.length - 1) : Math.max(idx - 1, 0);
+
+  currentRankedElement = ranked[idx];
+  const thumbnail = currentRankedElement.closest('yt-thumbnail-view-model, a#thumbnail, a.yt-lockup-view-model__content-image');
+
+  // Remove previous highlight and badge
+  document.querySelectorAll('.ytrb-current-focus').forEach((el) => el.classList.remove('ytrb-current-focus'));
+  document.querySelectorAll('.ytrb-rank-badge').forEach((el) => el.remove());
+
+  // Add highlight and rank badge to current thumbnail
+  if (thumbnail) {
+    thumbnail.classList.add('ytrb-current-focus');
+
+    const badge = document.createElement('div');
+    badge.className = 'ytrb-rank-badge';
+    badge.textContent = `#${idx + 1}`;
+    thumbnail.appendChild(badge);
+  }
+
+  currentRankedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
 };
 
 // Add keyboard shortcut listener
 document.addEventListener('keydown', (e) => {
   // Check for Cmd+B (Mac) or Ctrl+B (Windows/Linux)
   if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-    e.preventDefault(); // Prevent default browser behavior
-    scrollToHighestScore();
+    e.preventDefault();
+    // Shift+Cmd/Ctrl+B = previous, Cmd/Ctrl+B = next
+    scrollToRankedVideo(e.shiftKey ? 'backward' : 'forward');
   }
 });
 
@@ -760,7 +793,10 @@ function handleDomMutations() {
         const button = document.createElement('button');
         button.innerText = 'Scroll to best next video';
         button.className = 'ytrb-find-best-thumbnail';
-        button.addEventListener('click', scrollToHighestScore);
+        button.addEventListener('click', () => {
+          currentRankedElement = null;
+          scrollToRankedVideo('forward');
+        });
         related.insertBefore(button, related.firstChild);
       }
       addedFindBestThumbnailButton = true;
@@ -773,6 +809,9 @@ function handleDomMutations() {
     if (pageURL !== document.location.href) {
       pageURL = document.location.href;
       HIGHEST_SCORE = 0;
+      currentRankedElement = null;
+      document.querySelectorAll('.ytrb-current-focus').forEach((el) => el.classList.remove('ytrb-current-focus'));
+      document.querySelectorAll('.ytrb-rank-badge').forEach((el) => el.remove());
       allThumbnails.clear();
       processedVideoIds.clear();
       addedFindBestThumbnailButton = false;
@@ -805,6 +844,12 @@ function updateHighestScoreMarker() {
 
   if (highestElement) {
     highestElement.id = 'highest-score';
+    // Reset cycling position if top score changed
+    if (highestScore !== HIGHEST_SCORE) {
+      currentRankedElement = null;
+      document.querySelectorAll('.ytrb-current-focus').forEach((el) => el.classList.remove('ytrb-current-focus'));
+      document.querySelectorAll('.ytrb-rank-badge').forEach((el) => el.remove());
+    }
     HIGHEST_SCORE = highestScore;
   }
 }
