@@ -577,10 +577,19 @@ const sortThumbnails = () => {
 
   const sortedNodes = sortableEntries.sort((a, b) => b.score - a.score).map((e) => e.fullThumbnail);
 
+  // Skip DOM manipulation if already in correct order
+  const currentNodes = [...mainContents.children];
+  if (
+    currentNodes.length === sortedNodes.length &&
+    currentNodes.every((node, i) => node === sortedNodes[i])
+  ) {
+    return;
+  }
+
   const fragment = document.createDocumentFragment();
   sortedNodes.forEach((node) => fragment.appendChild(node));
 
-  mainContents.innerHTML = '';
+  while (mainContents.firstChild) mainContents.firstChild.remove();
   mainContents.appendChild(fragment);
 
   sectionList.querySelectorAll('ytd-item-section-renderer').forEach((section, i) => {
