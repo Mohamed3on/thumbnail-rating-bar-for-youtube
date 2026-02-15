@@ -153,6 +153,34 @@ const allThumbnails = new Map();
 let processedVideoIds = new Set();
 let sortTimeout = null;
 
+// Score cache: {videoId: {score, likes, dislikes, rating, total, ts}}
+const SCORE_CACHE_KEY = 'ytrb_score_cache';
+const SCORE_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+let scoreCache = {};
+
+// Load score cache from storage on startup
+chrome.storage.local.get(SCORE_CACHE_KEY, (result) => {
+  if (result[SCORE_CACHE_KEY]) {
+    const now = Date.now();
+    // Prune expired entries on load
+    const cached = result[SCORE_CACHE_KEY];
+    for (const id in cached) {
+      if (now - cached[id].ts < SCORE_CACHE_MAX_AGE_MS) {
+        scoreCache[id] = cached[id];
+      }
+    }
+  }
+});
+
+let scoreCacheDirty = false;
+const flushScoreCache = () => {
+  if (!scoreCacheDirty) return;
+  scoreCacheDirty = false;
+  chrome.storage.local.set({ [SCORE_CACHE_KEY]: scoreCache });
+};
+// Flush cache periodically (not per-video, to avoid write spam)
+setInterval(flushScoreCache, 5000);
+
 // Combined selector for better performance - single querySelectorAll call
 const THUMBNAIL_SELECTOR = [
   'a#thumbnail[href*="/watch?v="]',
@@ -172,6 +200,24 @@ const isVideoWatched = (thumbnail) => {
     thumbnail.closest('ytd-rich-grid-media, ytd-video-renderer, .yt-lockup-view-model-wiz') ||
     thumbnail;
   return !!container.querySelector(WATCHED_THUMBNAIL_SELECTOR);
+};
+
+// Retroactively mark a score element as watched once YouTube's watch bar loads
+const deferWatchedCheck = (targetContainer, scoreEl) => {
+  const container =
+    targetContainer.closest('ytd-rich-grid-media, ytd-video-renderer, .yt-lockup-view-model-wiz') ||
+    targetContainer;
+  const observer = new MutationObserver(() => {
+    if (container.querySelector(WATCHED_THUMBNAIL_SELECTOR)) {
+      scoreEl.dataset.watched = 'true';
+      scoreEl.id = 'watched';
+      observer.disconnect();
+      scheduleHighestScoreUpdate();
+    }
+  });
+  observer.observe(container, { childList: true, subtree: true });
+  // Stop watching after 10s to avoid leaks
+  setTimeout(() => observer.disconnect(), 10000);
 };
 
 // Tracks highest score for "scroll to best" feature (excludes watched videos and shorts outside search pages)
@@ -367,7 +413,6 @@ function addRatingBar(thumbnailElement, videoData, videoId) {
   // skip trying to add a rating bar after it. Also the code we use below to
   // add the rating bar after the thumbnail requires the parent to exist.
   if (targetContainer) {
-    const watched = isVideoWatched(targetContainer);
     const isPlaylist = !!targetContainer.querySelector(
       'ytd-thumbnail-overlay-side-panel-renderer, ytd-thumbnail-overlay-bottom-panel-renderer'
     );
@@ -381,10 +426,15 @@ function addRatingBar(thumbnailElement, videoData, videoId) {
       // 2. DOM element reuse when YouTube reuses thumbnail elements for different videos
       targetContainer.querySelectorAll('ytrb-score-bar, ytrb-bar').forEach((el) => el.remove());
 
-      targetContainer.appendChild(
-        getRatingScoreElement({ score: videoData.score, watched, isShort })
-      );
+      // Render immediately with watched=false, then update async when watch bar loads
+      const watched = isVideoWatched(targetContainer);
+      const scoreEl = getRatingScoreElement({ score: videoData.score, watched, isShort });
+      targetContainer.appendChild(scoreEl);
       targetContainer.appendChild(getRatingBarElement(videoData));
+
+      if (!watched) {
+        deferWatchedCheck(targetContainer, scoreEl);
+      }
 
       // Track which video's rating this element is currently showing
       // This allows detection of element reuse in future processing
@@ -575,22 +625,33 @@ const sortThumbnails = () => {
 
   if (!sortableEntries.length) return;
 
-  const sortedNodes = sortableEntries.sort((a, b) => b.score - a.score).map((e) => e.fullThumbnail);
+  sortableEntries.sort((a, b) => b.score - a.score);
 
-  // Skip DOM manipulation if already in correct order
-  const currentNodes = [...mainContents.children];
-  if (
-    currentNodes.length === sortedNodes.length &&
-    currentNodes.every((node, i) => node === sortedNodes[i])
-  ) {
-    return;
+  // Enable CSS-based ordering (no DOM moves = no MutationObserver thrash)
+  mainContents.style.display = 'flex';
+  mainContents.style.flexDirection = 'column';
+
+  const scoredSet = new Set();
+
+  // Move items from other sections into mainContents only if needed (one-time)
+  for (const { fullThumbnail } of sortableEntries) {
+    scoredSet.add(fullThumbnail);
+    if (fullThumbnail.parentElement !== mainContents) {
+      mainContents.appendChild(fullThumbnail);
+    }
   }
 
-  const fragment = document.createDocumentFragment();
-  sortedNodes.forEach((node) => fragment.appendChild(node));
+  // Reorder via CSS order — style changes don't trigger childList mutations
+  sortableEntries.forEach(({ fullThumbnail }, i) => {
+    fullThumbnail.style.order = String(i);
+  });
 
-  while (mainContents.firstChild) mainContents.firstChild.remove();
-  mainContents.appendChild(fragment);
+  // Push unscored items to the bottom
+  for (const child of mainContents.children) {
+    if (!scoredSet.has(child) && child.style.order !== '999999') {
+      child.style.order = '999999';
+    }
+  }
 
   sectionList.querySelectorAll('ytd-item-section-renderer').forEach((section, i) => {
     if (i > 0) section.style.display = 'none';
@@ -601,7 +662,7 @@ const scheduleSearchSort = () => {
   if (!isSearchPage()) return;
 
   clearTimeout(sortTimeout);
-  sortTimeout = setTimeout(sortThumbnails, 1000);
+  sortTimeout = setTimeout(sortThumbnails, 200);
 };
 
 // Adds the rating text percentage below or next to the thumbnail in the video
@@ -647,6 +708,7 @@ function addRatingPercentage(thumbnailElement, videoData) {
 function processNewThumbnails() {
   // Single querySelectorAll with combined selector - much more efficient
   const thumbnailLinks = document.querySelectorAll(THUMBNAIL_SELECTOR);
+  let hadCacheHits = false;
 
   for (const link of thumbnailLinks) {
     // Skip mix recommendations and playlists
@@ -693,7 +755,26 @@ function processNewThumbnails() {
 
     processedVideoIds.add(videoId);
 
-    // Get video data and add rating elements
+    // Apply cached score immediately for instant search sorting
+    const cached = scoreCache[videoId];
+    if (cached && Date.now() - cached.ts < SCORE_CACHE_MAX_AGE_MS) {
+      const cachedData = getVideoDataObject(cached.likes, cached.dislikes);
+      if (userSettings.barHeight !== 0) {
+        addRatingBar(link, cachedData, videoId);
+        scheduleHighestScoreUpdate();
+      }
+      if (
+        userSettings.showPercentage &&
+        cachedData.rating != null &&
+        !(cachedData.likes === 0 && cachedData.dislikes >= 10)
+      ) {
+        addRatingPercentage(link, cachedData);
+      }
+      hadCacheHits = true;
+      continue;
+    }
+
+    // Get video data from API
     getVideoDataFromApi(videoId)
       .then((videoData) => {
         if (videoData) {
@@ -708,6 +789,13 @@ function processNewThumbnails() {
           ) {
             addRatingPercentage(link, videoData);
           }
+          // Cache the score
+          scoreCache[videoId] = {
+            likes: videoData.likes,
+            dislikes: videoData.dislikes,
+            ts: Date.now(),
+          };
+          scoreCacheDirty = true;
 
           scheduleSearchSort();
         }
@@ -717,8 +805,9 @@ function processNewThumbnails() {
       });
   }
 
-  if (isSearchPage()) {
-    scheduleSearchSort();
+  // Cached scores were applied synchronously — sort immediately, no debounce
+  if (hadCacheHits && isSearchPage()) {
+    sortThumbnails();
   }
 }
 
