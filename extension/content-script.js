@@ -153,9 +153,8 @@ const allThumbnails = new Map();
 let processedVideoIds = new Set();
 let sortTimeout = null;
 
-// Score cache: {videoId: {score, likes, dislikes, rating, total, ts}}
+// Score cache: {videoId: {likes, dislikes, ts}}
 const SCORE_CACHE_KEY = 'ytrb_score_cache';
-const SCORE_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 let scoreCache = {};
 
 // Load score cache from storage on startup
@@ -165,7 +164,7 @@ chrome.storage.local.get(SCORE_CACHE_KEY, (result) => {
     // Prune expired entries on load
     const cached = result[SCORE_CACHE_KEY];
     for (const id in cached) {
-      if (now - cached[id].ts < SCORE_CACHE_MAX_AGE_MS) {
+      if (now - cached[id].ts < DEFAULT_USER_SETTINGS.cacheDuration) {
         scoreCache[id] = cached[id];
       }
     }
@@ -231,21 +230,6 @@ const getScore = ({ likes, dislikes, rating }) => (likes - dislikes) * rating;
 
 let pageURL = document.location.href;
 
-// The default user settings. `userSettings` is replaced with the stored user's
-// settings once they are loaded.
-const DEFAULT_USER_SETTINGS = {
-  barPosition: 'bottom',
-  barColor: 'blue-gray',
-  barLikesColor: '#3095e3',
-  barDislikesColor: '#cfcfcf',
-  barColorsSeparator: false,
-  barHeight: 4,
-  barOpacity: 100,
-  barSeparator: false,
-  useExponentialScaling: false,
-  barTooltip: true,
-  showPercentage: false,
-};
 let userSettings = DEFAULT_USER_SETTINGS;
 
 function sleep(ms) {
@@ -757,7 +741,7 @@ function processNewThumbnails() {
 
     // Apply cached score immediately for instant search sorting
     const cached = scoreCache[videoId];
-    if (cached && Date.now() - cached.ts < SCORE_CACHE_MAX_AGE_MS) {
+    if (cached && Date.now() - cached.ts < (userSettings.cacheDuration || DEFAULT_USER_SETTINGS.cacheDuration)) {
       const cachedData = getVideoDataObject(cached.likes, cached.dislikes);
       if (userSettings.barHeight !== 0) {
         addRatingBar(link, cachedData, videoId);

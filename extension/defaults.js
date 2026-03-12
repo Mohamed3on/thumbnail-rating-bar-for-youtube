@@ -1,0 +1,15 @@
+const DEFAULT_USER_SETTINGS = {
+  barPosition: 'bottom',
+  barColor: 'blue-gray',
+  barLikesColor: '#3095e3',
+  barDislikesColor: '#cfcfcf',
+  barColorsSeparator: false,
+  barHeight: 4,
+  barOpacity: 100,
+  barSeparator: false,
+  useExponentialScaling: false,
+  barTooltip: true,
+  showPercentage: false,
+  cacheDuration: 600000,
+  youtubeApiKey: '',
+};

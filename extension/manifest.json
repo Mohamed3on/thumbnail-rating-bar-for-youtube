@@ -25,7 +25,7 @@
         "*://*.youtube.com/*",
         "*://youtube.com/*"
       ],
-      "js": ["content-script.js"],
+      "js": ["defaults.js", "content-script.js"],
       "run_at": "document_end"
     }
   ],
@@ -35,7 +35,7 @@
     "*://*.returnyoutubedislikeapi.com/*",
     "https://www.googleapis.com/*"
   ],
-  "permissions": ["storage", "scripting", "alarms"],
+  "permissions": ["storage", "scripting"],
   "web_accessible_resources": [
     {
       "resources": [

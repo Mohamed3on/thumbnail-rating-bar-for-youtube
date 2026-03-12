@@ -57,26 +57,7 @@ async function handleGetLikesData(videoId) {
   if (!videoId) return null;
 
   try {
-    // Check cache
-    const cached = await chrome.storage.local.get(videoId);
-    const { cacheDuration } = await getStorageData('cacheDuration');
-    const now = Date.now();
-
-    if (cached[videoId]?.timestamp && now - cached[videoId].timestamp <= cacheDuration) {
-      console.log(`Cache hit for ${videoId}`);
-      return cached[videoId].data;
-    }
-
-    // Fetch new data
-    console.log(`Cache miss for ${videoId}, fetching...`);
-    const likesData = await fetchLikesData(videoId);
-    
-    // Store in cache
-    await chrome.storage.local.set({ 
-      [videoId]: { data: likesData, timestamp: now } 
-    });
-    
-    return likesData;
+    return await fetchLikesData(videoId);
   } catch (error) {
     console.error(`Error getting likes for ${videoId}:`, error);
     return null;
@@ -103,32 +84,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     ['cacheDuration', 'youtubeApiKey'].forEach(key => {
       if (message[key] !== undefined) updates[key] = message[key];
     });
-    
+
     if (Object.keys(updates).length) {
       chrome.storage.sync.set(updates)
         .then(() => console.log('Updated settings:', updates))
         .catch(error => console.error('Failed to update settings:', error));
     }
   }
-});
 
-// --- Cache Cleanup ---
-
-chrome.alarms.create('cleanupCache', { periodInMinutes: 60 });
-
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name !== 'cleanupCache') return;
-  
-  const { cacheDuration = DEFAULT_CACHE_DURATION } = await getStorageData('cacheDuration');
-  const now = Date.now();
-  const cache = await chrome.storage.local.get(null);
-  
-  const expired = Object.keys(cache).filter(
-    key => cache[key]?.timestamp && now - cache[key].timestamp > cacheDuration
-  );
-  
-  if (expired.length) {
-    await chrome.storage.local.remove(expired);
-    console.log(`Removed ${expired.length} expired cache entries`);
+  if (message.query === 'clearCache') {
+    chrome.storage.local.clear()
+      .then(() => console.log('Cache cleared'))
+      .catch(error => console.error('Failed to clear cache:', error));
   }
 });

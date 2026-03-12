@@ -1,20 +1,3 @@
-const DEFAULT_USER_SETTINGS = {
-  barPosition: 'bottom',
-  barColor: 'blue-gray',
-  barLikesColor: '#3095e3',
-  barDislikesColor: '#cfcfcf',
-  barColorsSeparator: false,
-  barHeight: 4,
-  barOpacity: 100,
-  barSeparator: false,
-  useExponentialScaling: false,
-  barTooltip: true,
-  useOnVideoPage: false,
-  showPercentage: false,
-  cacheDuration: 600000,
-  youtubeApiKey: '',
-};
-
 function sanitizeHexColor(str) {
   return str.replace(/[^#0-9a-zA-Z]/g, '');
 }
@@ -245,6 +228,17 @@ function applySettings(settings, applyColors = true) {
     $('#youtube-api-key').parent().removeClass('is-invalid').addClass('is-dirty');
   }
 }
+
+// Clear cache.
+$('#clear-cache-btn').click(function () {
+  chrome.storage.local.clear(() => {
+    document.querySelector('#toast').MaterialSnackbar.showSnackbar({
+      message: 'Cache cleared.',
+      timeout: 2000,
+    });
+  });
+  chrome.runtime.sendMessage({ query: 'clearCache' });
+});
 
 // Restore defaults.
 $('#restore-defaults-btn').click(function () {
