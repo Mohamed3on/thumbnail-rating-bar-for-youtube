@@ -4,8 +4,7 @@
  * Core Implementation Notes:
  * - Uses debounced mutation observer to detect new thumbnails (avoid excessive API calls)
  * - Tracks processed videos by ID to prevent duplicate processing
- * - Sorts search results by score (videos and shorts)
- * - Identifies highest scoring unWatched video for "scroll to best" feature
+ * - Identifies highest scoring unwatched video for "scroll to best" feature
  * - Supports both rating bars and text percentages based on user settings
  */
 
@@ -16,16 +15,17 @@ let highestScoreTimeout;
 const WATCHED_THUMBNAIL_SELECTOR =
   '.ytThumbnailOverlayProgressBarHostWatchedProgressBarSegment, ytd-thumbnail-overlay-resume-playback-renderer';
 
-// Track current element in ranked video list for cycling
+// Track current element in ranked video list for cycling (all videos vs unwatched only)
 let currentRankedElement = null;
+let currentUnwatchedElement = null;
 
-// Get all scored videos sorted by score descending, excluding watched
-const getRankedVideos = () => {
+// Get all scored videos sorted by score descending
+const getRankedVideos = ({ unwatchedOnly = false } = {}) => {
   const scoreBars = Array.from(document.querySelectorAll('ytrb-score-bar[data-score]'));
   const isSearch = window.location.href.includes('search');
   return scoreBars
     .filter((el) => {
-      if (el.dataset.watched === 'true') return false;
+      if (unwatchedOnly && el.dataset.watched === 'true') return false;
       if (el.dataset.isShort === 'true' && !isSearch) return false;
       return true;
     })
@@ -33,21 +33,26 @@ const getRankedVideos = () => {
 };
 
 // Scroll to video at given rank index (0 = best, 1 = 2nd best, etc.)
-const scrollToRankedVideo = (direction) => {
-  const ranked = getRankedVideos();
+const scrollToRankedVideo = (direction, { unwatchedOnly = false } = {}) => {
+  const ranked = getRankedVideos({ unwatchedOnly });
   if (!ranked.length) {
     processNewThumbnails();
     return;
   }
 
+  const current = unwatchedOnly ? currentUnwatchedElement : currentRankedElement;
+
   // Find where current element is in the sorted list (-1 if gone/null)
-  let idx = currentRankedElement?.isConnected ? ranked.indexOf(currentRankedElement) : -1;
+  let idx = current?.isConnected ? ranked.indexOf(current) : -1;
 
   // Calculate new index, clamped to bounds (no wrap-around)
   idx = direction === 'forward' ? Math.min(idx + 1, ranked.length - 1) : Math.max(idx - 1, 0);
 
-  currentRankedElement = ranked[idx];
-  const thumbnail = currentRankedElement.closest('yt-thumbnail-view-model, a#thumbnail, a.yt-lockup-view-model__content-image');
+  if (unwatchedOnly) currentUnwatchedElement = ranked[idx];
+  else currentRankedElement = ranked[idx];
+
+  const target = ranked[idx];
+  const thumbnail = target.closest('yt-thumbnail-view-model, a#thumbnail, a.yt-lockup-view-model__content-image');
 
   // Remove previous highlight and badge
   document.querySelectorAll('.ytrb-current-focus').forEach((el) => el.classList.remove('ytrb-current-focus'));
@@ -63,17 +68,19 @@ const scrollToRankedVideo = (direction) => {
     thumbnail.appendChild(badge);
   }
 
-  currentRankedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
 };
 
 // Add keyboard shortcut listener
+// ] / [ = cycle unwatched, } / { (Shift+]/[) = cycle all
 document.addEventListener('keydown', (e) => {
-  // Check for Cmd+B (Mac) or Ctrl+B (Windows/Linux)
-  if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-    e.preventDefault();
-    // Shift+Cmd/Ctrl+B = previous, Cmd/Ctrl+B = next
-    scrollToRankedVideo(e.shiftKey ? 'backward' : 'forward');
-  }
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+  if (e.key !== ']' && e.key !== '[' && e.key !== '}' && e.key !== '{') return;
+
+  e.preventDefault();
+  const direction = e.key === ']' || e.key === '}' ? 'forward' : 'backward';
+  const unwatchedOnly = !e.shiftKey;
+  scrollToRankedVideo(direction, { unwatchedOnly });
 });
 
 const NOT_INTERESTED_KEYWORDS = ['not interested'];
@@ -149,9 +156,7 @@ const IS_YOUTUBE_KIDS_SITE = window.location.href.startsWith('https://www.youtub
 const IS_USING_DARK_THEME =
   getComputedStyle(document.body).getPropertyValue('--yt-spec-general-background-a') === ' #181818';
 
-const allThumbnails = new Map();
 let processedVideoIds = new Set();
-let sortTimeout = null;
 
 // Score cache: {videoId: {likes, dislikes, ts}}
 const SCORE_CACHE_KEY = 'ytrb_score_cache';
@@ -423,14 +428,6 @@ function addRatingBar(thumbnailElement, videoData, videoId) {
       // Track which video's rating this element is currently showing
       // This allows detection of element reuse in future processing
       targetContainer.dataset.ytrbVideoId = videoId;
-
-      const fullThumbnail = getFullThumbnail(targetContainer);
-      if (fullThumbnail && isSearchPage()) {
-        allThumbnails.set(fullThumbnail, {
-          score: videoData.score,
-          isShort,
-        });
-      }
     }
   }
 }
@@ -558,96 +555,7 @@ const METADATA_LINE_DATA_MOBILE = [
   ['.compact-media-item', '.subhead', 'compact-media-item-stats small-text'],
 ];
 
-const getFullThumbnail = (thumbnail) =>
-  thumbnail.closest(
-    '.ytd-rich-item-renderer, ' + // Home page.
-      'ytd-video-renderer, ' + // Search page results.
-      'ytd-grid-video-renderer, ' + // Search page shelf videos.
-      '.ytd-grid-renderer, ' + // Trending and subscriptions page.
-      '.ytd-expanded-shelf-contents-renderer, ' + // Also subscriptions page.
-      '.yt-horizontal-list-renderer, ' + // Channel page.
-      '.ytd-item-section-renderer, ' + // History / Player page.
-      '.ytd-horizontal-card-list-renderer, ' + // Gaming page.
-      '.ytGridShelfViewModelGridShelfItem, ' + // Mobile grid shelf items (e.g., Shorts tiles).
-      '.ytd-playlist-video-list-renderer' // Playlist page.
-  );
-
-const SEARCH_RESULTS_CONTAINER_SELECTORS = [
-  'ytd-two-column-search-results-renderer #primary ytd-section-list-renderer ytd-item-section-renderer > #contents.ytd-item-section-renderer',
-  'ytd-section-list-renderer ytd-item-section-renderer > #contents.ytd-item-section-renderer',
-  'ytd-item-section-renderer > #contents.ytd-item-section-renderer',
-  '#contents.ytd-item-section-renderer',
-];
-
 const isSearchPage = () => window.location.href.includes('search');
-
-const getPrimaryResultsContainer = () => {
-  for (const selector of SEARCH_RESULTS_CONTAINER_SELECTORS) {
-    const el = document.querySelector(selector);
-    if (el) {
-      return el;
-    }
-  }
-  return null;
-};
-
-const sortThumbnails = () => {
-  if (!isSearchPage()) return;
-
-  const sectionList = document.querySelector('div#primary ytd-section-list-renderer');
-  const mainContents = sectionList?.querySelector('ytd-item-section-renderer #contents');
-  if (!mainContents) return;
-
-  const sortableEntries = [];
-  allThumbnails.forEach((data, fullThumbnail) => {
-    if (fullThumbnail?.isConnected && sectionList.contains(fullThumbnail)) {
-      sortableEntries.push({ fullThumbnail, score: data.score, isShort: data.isShort });
-    } else {
-      allThumbnails.delete(fullThumbnail);
-    }
-  });
-
-  if (!sortableEntries.length) return;
-
-  sortableEntries.sort((a, b) => b.score - a.score);
-
-  // Enable CSS-based ordering (no DOM moves = no MutationObserver thrash)
-  mainContents.style.display = 'flex';
-  mainContents.style.flexDirection = 'column';
-
-  const scoredSet = new Set();
-
-  // Move items from other sections into mainContents only if needed (one-time)
-  for (const { fullThumbnail } of sortableEntries) {
-    scoredSet.add(fullThumbnail);
-    if (fullThumbnail.parentElement !== mainContents) {
-      mainContents.appendChild(fullThumbnail);
-    }
-  }
-
-  // Reorder via CSS order — style changes don't trigger childList mutations
-  sortableEntries.forEach(({ fullThumbnail }, i) => {
-    fullThumbnail.style.order = String(i);
-  });
-
-  // Push unscored items to the bottom
-  for (const child of mainContents.children) {
-    if (!scoredSet.has(child) && child.style.order !== '999999') {
-      child.style.order = '999999';
-    }
-  }
-
-  sectionList.querySelectorAll('ytd-item-section-renderer').forEach((section, i) => {
-    if (i > 0) section.style.display = 'none';
-  });
-};
-
-const scheduleSearchSort = () => {
-  if (!isSearchPage()) return;
-
-  clearTimeout(sortTimeout);
-  sortTimeout = setTimeout(sortThumbnails, 200);
-};
 
 // Adds the rating text percentage below or next to the thumbnail in the video
 // metadata line.
@@ -687,12 +595,10 @@ function addRatingPercentage(thumbnailElement, videoData) {
  * - Finds all thumbnail links on the page using cached selectors
  * - Extracts video IDs and skips already processed videos
  * - Makes API calls for rating data and adds visual elements
- * - Triggers immediate sorting on search pages for better UX
  */
 function processNewThumbnails() {
   // Single querySelectorAll with combined selector - much more efficient
   const thumbnailLinks = document.querySelectorAll(THUMBNAIL_SELECTOR);
-  let hadCacheHits = false;
 
   for (const link of thumbnailLinks) {
     // Skip mix recommendations and playlists
@@ -725,10 +631,6 @@ function processNewThumbnails() {
     // Clean up if element is being reused for a different video
     if (existingVideoId) {
       link.querySelectorAll('ytrb-score-bar, ytrb-bar').forEach((el) => el.remove());
-      const reusedFullThumbnail = getFullThumbnail(link);
-      if (reusedFullThumbnail) {
-        allThumbnails.delete(reusedFullThumbnail);
-      }
       delete link.dataset.ytrbVideoId;
     }
 
@@ -739,7 +641,6 @@ function processNewThumbnails() {
 
     processedVideoIds.add(videoId);
 
-    // Apply cached score immediately for instant search sorting
     const cached = scoreCache[videoId];
     if (cached && Date.now() - cached.ts < (userSettings.cacheDuration || DEFAULT_USER_SETTINGS.cacheDuration)) {
       const cachedData = getVideoDataObject(cached.likes, cached.dislikes);
@@ -754,7 +655,6 @@ function processNewThumbnails() {
       ) {
         addRatingPercentage(link, cachedData);
       }
-      hadCacheHits = true;
       continue;
     }
 
@@ -780,18 +680,11 @@ function processNewThumbnails() {
             ts: Date.now(),
           };
           scoreCacheDirty = true;
-
-          scheduleSearchSort();
         }
       })
       .catch(() => {
         processedVideoIds.delete(videoId);
       });
-  }
-
-  // Cached scores were applied synchronously — sort immediately, no debounce
-  if (hadCacheHits && isSearchPage()) {
-    sortThumbnails();
   }
 }
 
@@ -876,12 +769,19 @@ function handleDomMutations() {
         button.innerText = 'Scroll to best next video';
         button.className = 'ytrb-find-best-thumbnail';
         button.addEventListener('click', () => {
-          currentRankedElement = null;
-          scrollToRankedVideo('forward');
+          currentUnwatchedElement = null;
+          scrollToRankedVideo('forward', { unwatchedOnly: true });
         });
         related.insertBefore(button, related.firstChild);
       }
       addedFindBestThumbnailButton = true;
+    }
+
+    // Remove non-video clutter from search results (shelves, ads, shorts carousels, etc.)
+    if (isSearchPage()) {
+      document.querySelectorAll(
+        'ytd-shelf-renderer, ytd-reel-shelf-renderer, ytd-ad-slot-renderer, ytd-promoted-sparkles-web-renderer, ytd-search-pyv-renderer'
+      ).forEach((el) => el.remove());
     }
 
     // Process thumbnails
@@ -892,9 +792,9 @@ function handleDomMutations() {
       pageURL = document.location.href;
       HIGHEST_SCORE = 0;
       currentRankedElement = null;
+      currentUnwatchedElement = null;
       document.querySelectorAll('.ytrb-current-focus').forEach((el) => el.classList.remove('ytrb-current-focus'));
       document.querySelectorAll('.ytrb-rank-badge').forEach((el) => el.remove());
-      allThumbnails.clear();
       processedVideoIds.clear();
       addedFindBestThumbnailButton = false;
     }
@@ -929,6 +829,7 @@ function updateHighestScoreMarker() {
     // Reset cycling position if top score changed
     if (highestScore !== HIGHEST_SCORE) {
       currentRankedElement = null;
+      currentUnwatchedElement = null;
       document.querySelectorAll('.ytrb-current-focus').forEach((el) => el.classList.remove('ytrb-current-focus'));
       document.querySelectorAll('.ytrb-rank-badge').forEach((el) => el.remove());
     }
