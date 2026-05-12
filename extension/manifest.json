@@ -27,6 +27,15 @@
       ],
       "js": ["defaults.js", "content-script.js"],
       "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": ["page-script.js"],
+      "run_at": "document_end",
+      "world": "MAIN"
     }
   ],
   "host_permissions": [

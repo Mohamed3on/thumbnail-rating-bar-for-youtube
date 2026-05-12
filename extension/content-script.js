@@ -15,6 +15,12 @@ let highestScoreTimeout;
 const WATCHED_THUMBNAIL_SELECTOR =
   '.ytThumbnailOverlayProgressBarHostWatchedProgressBarSegment, ytd-thumbnail-overlay-resume-playback-renderer';
 
+const LOCKUP_CONTAINER_SELECTOR =
+  'yt-lockup-view-model, ytd-compact-video-renderer, ytd-rich-item-renderer, ytd-video-renderer';
+
+const LOCKUP_TITLE_SELECTOR =
+  '#video-title, .yt-lockup-metadata-view-model__title span, .ytLockupMetadataViewModelTitle span';
+
 // Track current element in ranked video list for cycling (all videos vs unwatched only)
 let currentRankedElement = null;
 let currentUnwatchedElement = null;
@@ -52,29 +58,62 @@ const scrollToRankedVideo = (direction, { unwatchedOnly = false } = {}) => {
   else currentRankedElement = ranked[idx];
 
   const target = ranked[idx];
-  const thumbnail = target.closest('yt-thumbnail-view-model, a#thumbnail, a.yt-lockup-view-model__content-image');
+  const thumbnail = target.closest('yt-thumbnail-view-model, a#thumbnail, a.yt-lockup-view-model__content-image, a.ytLockupViewModelContentImage');
 
   // Remove previous highlight and badge
   document.querySelectorAll('.ytrb-current-focus').forEach((el) => el.classList.remove('ytrb-current-focus'));
   document.querySelectorAll('.ytrb-rank-badge').forEach((el) => el.remove());
 
-  // Add highlight and rank badge to current thumbnail
+  // Add highlight and rank badge
   if (thumbnail) {
     thumbnail.classList.add('ytrb-current-focus');
 
-    const badge = document.createElement('div');
+    const badge = document.createElement('span');
     badge.className = 'ytrb-rank-badge';
     badge.textContent = `#${idx + 1}`;
-    thumbnail.appendChild(badge);
+
+    // Place badge on the title text
+    const container = thumbnail.closest(LOCKUP_CONTAINER_SELECTOR);
+    const title = container?.querySelector(LOCKUP_TITLE_SELECTOR);
+    if (title) {
+      title.appendChild(badge);
+    } else {
+      thumbnail.appendChild(badge);
+    }
   }
 
   target.scrollIntoView({ behavior: 'smooth', block: 'center' });
 };
 
+// Dismiss the top-ranked video and scroll to next best
+function dismissTopVideo() {
+  const el = document.querySelector('#highest-score');
+  if (!el) return;
+  const container = el.closest(LOCKUP_CONTAINER_SELECTOR);
+  if (!container) return;
+
+  // page-script.js (MAIN world) observes this attribute and triggers the "Not interested" menu
+  container.dataset.ytrbDismiss = '';
+
+  el.dataset.watched = 'true';
+  el.id = 'watched';
+  HIGHEST_SCORE = 0; // force updateHighestScoreMarker to reset cycling state
+  updateHighestScoreMarker();
+  scrollToRankedVideo('forward', { unwatchedOnly: true });
+}
+
 // Add keyboard shortcut listener
-// ] / [ = cycle unwatched, } / { (Shift+]/[) = cycle all
+// ] / [ = cycle unwatched, } / { (Shift+]/[) = cycle all, n = dismiss top video
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+  if (e.key === 'n') {
+    e.preventDefault();
+    e.stopPropagation();
+    dismissTopVideo();
+    return;
+  }
+
   if (e.key !== ']' && e.key !== '[' && e.key !== '}' && e.key !== '{') return;
 
   e.preventDefault();
@@ -192,25 +231,25 @@ const THUMBNAIL_SELECTOR = [
   'a#thumbnail[href*="/shorts/"]',
   'a.yt-lockup-view-model__content-image[href*="/watch?v="]',
   'a.yt-lockup-view-model__content-image[href*="/live/"]',
+  'a.ytLockupViewModelContentImage[href*="/watch?v="]',
+  'a.ytLockupViewModelContentImage[href*="/live/"]',
   'a.shortsLockupViewModelHostEndpoint[href*="/shorts/"]',
   'a.ytp-videowall-still[href]',
 ].join(',');
 
+const WATCHED_CONTAINER_SELECTOR =
+  'ytd-rich-grid-media, ytd-video-renderer, .yt-lockup-view-model-wiz, .ytLockupViewModelHost';
+
 let addedFindBestThumbnailButton = false;
 
 const isVideoWatched = (thumbnail) => {
-  // Look for watched indicators in the thumbnail or its closest container
-  const container =
-    thumbnail.closest('ytd-rich-grid-media, ytd-video-renderer, .yt-lockup-view-model-wiz') ||
-    thumbnail;
+  const container = thumbnail.closest(WATCHED_CONTAINER_SELECTOR) || thumbnail;
   return !!container.querySelector(WATCHED_THUMBNAIL_SELECTOR);
 };
 
 // Retroactively mark a score element as watched once YouTube's watch bar loads
 const deferWatchedCheck = (targetContainer, scoreEl) => {
-  const container =
-    targetContainer.closest('ytd-rich-grid-media, ytd-video-renderer, .yt-lockup-view-model-wiz') ||
-    targetContainer;
+  const container = targetContainer.closest(WATCHED_CONTAINER_SELECTOR) || targetContainer;
   const observer = new MutationObserver(() => {
     if (container.querySelector(WATCHED_THUMBNAIL_SELECTOR)) {
       scoreEl.dataset.watched = 'true';
@@ -388,7 +427,7 @@ function addRatingBar(thumbnailElement, videoData, videoId) {
   if (!targetContainer) {
     // Fallback to the link container or parent
     targetContainer = thumbnailElement.closest(
-      'a#thumbnail, a.yt-lockup-view-model__content-image'
+      'a#thumbnail, a.yt-lockup-view-model__content-image, a.ytLockupViewModelContentImage'
     );
     if (!targetContainer) {
       targetContainer = thumbnailElement.parentElement;
@@ -495,11 +534,17 @@ const METADATA_LINE_DATA_DESKTOP = [
     '.shortsLockupViewModelHostMetadataSubhead',
     'yt-core-attributed-string yt-core-attributed-string--white-space-pre-wrap',
   ],
-  // - Subscriptions page videos
+  // - Subscriptions page videos (wiz style)
   [
     '.yt-lockup-view-model-wiz',
     '.yt-content-metadata-view-model-wiz__metadata-row:last-child',
     'yt-core-attributed-string yt-content-metadata-view-model-wiz__metadata-text yt-core-attributed-string--white-space-pre-wrap yt-core-attributed-string--link-inherit-color',
+  ],
+  // - Watch page sidebar / camelCase lockup style
+  [
+    '.ytLockupViewModelHost',
+    '.ytContentMetadataViewModelMetadataRow:last-of-type',
+    'yt-core-attributed-string ytContentMetadataViewModelMetadataText yt-core-attributed-string--white-space-pre-wrap yt-core-attributed-string--link-inherit-color',
   ],
   // - Playlist page small thumbnails
   [
@@ -638,6 +683,11 @@ function processNewThumbnails() {
     if (processedVideoIds.has(videoId)) {
       continue;
     }
+
+    // Skip hidden duplicates — YouTube renders a display:none copy of the watch
+    // page sidebar (under #below) alongside the visible one (under #secondary).
+    // Checked here (after cheap dedup guards) because offsetParent forces layout.
+    if (link.offsetParent === null) continue;
 
     processedVideoIds.add(videoId);
 

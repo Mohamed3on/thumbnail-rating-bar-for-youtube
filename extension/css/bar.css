@@ -43,6 +43,11 @@ ytrb-dislikes {
   position: relative;
 }
 
+/* For camelCase lockup style thumbnails (watch page sidebar, etc.) */
+a.ytLockupViewModelContentImage yt-thumbnail-view-model {
+  position: relative;
+}
+
 /* For YouTube Gaming. Prevents the rating bar from showing over the top menu bar. */
 ytg-thumbnail .ytrb-bar {
   z-index: 1;
@@ -107,16 +112,16 @@ ytrb-score-bar {
 
 /* Rank badge shown when cycling */
 .ytrb-rank-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 6px;
   background: #6aff6f;
   color: #000;
   font-weight: bold;
-  font-size: 14px;
-  padding: 4px 8px;
+  font-size: 12px;
+  padding: 2px 6px;
   border-radius: 4px;
-  z-index: 1000;
+  white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   animation: ytrb-badge-pop 0.3s ease-out;
 }

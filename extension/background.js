@@ -46,7 +46,8 @@ async function fetchLikesData(videoId) {
   try {
     return await fetchFromRYDAPI(videoId);
   } catch (error) {
-    console.log(`RYD failed for ${videoId}, trying YouTube API:`, error.message);
+    const { youtubeApiKey } = await getStorageData('youtubeApiKey');
+    if (!youtubeApiKey) throw error;
     return await fetchFromYouTubeAPI(videoId);
   }
 }
@@ -71,7 +72,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleGetLikesData(message.videoId).then(sendResponse);
     return true; // Keep channel open for async response
   }
-  
+
   if (message.query === 'insertCss' && sender.tab?.id && message.url) {
     chrome.scripting.insertCSS({
       target: { tabId: sender.tab.id },
