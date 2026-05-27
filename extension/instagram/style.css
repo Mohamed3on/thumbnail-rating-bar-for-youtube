@@ -1,0 +1,26 @@
+/* Brief glow + rank/likes label on the post we just scrolled to via ] / [.
+ * !important needed because IG sets its own focus styles at higher specificity.
+ */
+.igrb-focused {
+  outline: 5px solid #00ff7f !important;
+  outline-offset: -5px !important;
+  box-shadow: 0 0 24px rgba(0, 255, 127, 0.85) !important;
+  z-index: 100 !important;
+  position: relative !important;
+}
+
+.igrb-focus-label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: #00ff7f;
+  color: #000;
+  font: 800 14px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  padding: 6px 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 101;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
