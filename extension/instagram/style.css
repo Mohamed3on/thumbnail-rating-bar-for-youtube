@@ -1,26 +1,79 @@
-/* Brief glow + rank/likes label on the post we just scrolled to via ] / [.
- * !important needed because IG sets its own focus styles at higher specificity.
- */
+/* Persistent, prominent highlight + rank/likes pill on the post cycled to via
+ * ] / [. Stays until the next cycle. !important throughout because IG sets its
+ * own styles at higher specificity. The tile lifts, rings in IG-red, and pulses
+ * so it's unmistakable even on a busy grid. */
 .igrb-focused {
-  outline: 5px solid #00ff7f !important;
-  outline-offset: -5px !important;
-  box-shadow: 0 0 24px rgba(0, 255, 127, 0.85) !important;
+  border-radius: 8px !important;
+  transform: scale(1.035) !important;
   z-index: 100 !important;
   position: relative !important;
+  animation: igrb-pulse 1.8s ease-in-out infinite !important;
+  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1) !important;
+}
+
+@keyframes igrb-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 0 3px #fff,
+      0 0 0 4px #ff3040,
+      0 0 18px 2px rgba(255, 48, 64, 0.6),
+      0 18px 44px rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 3px #fff,
+      0 0 0 5px #ff3040,
+      0 0 34px 7px rgba(255, 48, 64, 0.95),
+      0 18px 44px rgba(0, 0, 0, 0.5);
+  }
 }
 
 .igrb-focus-label {
   position: absolute;
   top: 10px;
   left: 10px;
-  background: #00ff7f;
-  color: #000;
-  font: 800 14px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  padding: 6px 10px;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(18, 18, 20, 0.78);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
+  backdrop-filter: blur(10px) saturate(1.4);
+  color: #fff;
+  font: 700 15px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  padding: 7px 13px 7px 7px;
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
   pointer-events: none;
   z-index: 101;
-  letter-spacing: 0.2px;
   white-space: nowrap;
+  animation: igrb-pop 0.24s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.igrb-rank {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 800;
+  font-size: 14px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+  letter-spacing: 0.3px;
+}
+
+.igrb-likes {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.igrb-heart {
+  color: #ff3040;
+  font-size: 16px;
+  line-height: 1;
+}
+
+@keyframes igrb-pop {
+  from { opacity: 0; transform: translateY(-6px) scale(0.92); }
+  to   { opacity: 1; transform: none; }
 }

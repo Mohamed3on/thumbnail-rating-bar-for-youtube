@@ -14,17 +14,30 @@ const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const POST_HREF_REGEX = /\/(p|reel|tv)\/([A-Za-z0-9_-]+)/;
 const POST_LINK_SELECTOR = 'a[href*="/p/"], a[href*="/reel/"], a[href*="/tv/"]';
 const FOCUS_CLASS = 'igrb-focused';
-const FOCUS_DURATION_MS = 2500;
 const LOG = '[igrb]';
 
 const cache = new Map();
 let cacheDirty = false;
 let currentShortcode = null;
 
+// Per-feed rank state. `offsets` remembers each post's absolute document Y the
+// first time we see it rendered, so cycling can scroll back to a post even after
+// IG virtualizes its tile out of the grid. Keyed by the 11-char DOM shortcode and
+// cleared whenever the path changes (different profile / tab → different feed).
+const offsets = new Map();
+let feedKey = location.pathname;
+
 function extractShortcode(href) {
   if (!href) return null;
   const m = href.match(POST_HREF_REGEX);
   return m ? m[2] : null;
+}
+
+// 2 340 454 → "2.3M", 529 824 → "530K". Mirrors IG's own like-count formatting.
+function formatLikes(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1e3) return Math.round(n / 1e3) + 'K';
+  return String(n);
 }
 
 chrome.storage.local.get(CACHE_KEY, (result) => {
@@ -80,64 +93,87 @@ document.addEventListener('igrb-data', (e) => {
   catch (err) { console.warn(LOG, 'event parse failed:', err); }
 });
 
-// IG's API code is always the URL shortcode optionally followed by extra chars
-// (legacy posts: exact 11-char match; new format: ~28-char with the 11-char
-// shortcode as prefix). One-directional `startsWith` is therefore safe; the
-// reverse direction would let an API code that happens to be a prefix of a
-// longer rendered shortcode collide with an unrelated post.
-function findLinkByApiCode(apiCode) {
+function findLinkByShortcode(sc) {
   for (const link of document.querySelectorAll(POST_LINK_SELECTOR)) {
-    const domSc = extractShortcode(link.getAttribute('href'));
-    if (domSc && apiCode.startsWith(domSc)) return link;
+    if (extractShortcode(link.getAttribute('href')) === sc) return link;
   }
   return null;
 }
 
-// Rank only over posts currently rendered as links in the DOM. This naturally
-// excludes (a) cache entries from other profiles, (b) "suggested" / sidebar
-// shortcodes that come through GraphQL but never get a visible link, and
-// (c) posts virtualized far enough off-screen that we couldn't scroll to them
-// anyway. As the user scrolls, IG renders new links and the rank expands.
-function getRanked() {
-  const domShortcodes = new Set();
+// Record the absolute Y of every grid link we haven't seen before. Capturing on
+// first sight (rather than at rank time) keeps a post rankable — and scrollable-to
+// — after IG virtualizes its tile away. A path change means we've moved to a
+// different feed, so the old positions are void.
+function captureOffsets() {
+  if (location.pathname !== feedKey) {
+    feedKey = location.pathname;
+    offsets.clear();
+    currentShortcode = null;
+    clearFocus();
+  }
+  const pageY = window.scrollY;
   for (const link of document.querySelectorAll(POST_LINK_SELECTOR)) {
     const sc = extractShortcode(link.getAttribute('href'));
-    if (sc) domShortcodes.add(sc);
+    if (sc && !offsets.has(sc)) offsets.set(sc, link.getBoundingClientRect().top + pageY);
   }
-  if (!domShortcodes.size) return [];
-  const out = [];
+}
+
+let captureTimer = null;
+function scheduleCapture() {
+  if (captureTimer) return;
+  captureTimer = setTimeout(() => { captureTimer = null; captureOffsets(); }, 200);
+}
+
+// Rank over every post seen on this feed (filtered to those we have likes for),
+// not just the handful IG currently renders — otherwise the rendered window's max
+// masquerades as the global #1 and the true top post vanishes the moment it
+// scrolls out of the DOM. Suggested / cross-profile cache entries are excluded
+// for free: they never get a rendered link, so they never enter `offsets`.
+function getRanked() {
+  // Index likes by the 11-char URL shortcode. IG sometimes keys a post under a
+  // longer `code`, but the shortcode is always its prefix, so slicing collapses
+  // both keyings onto the DOM shortcode in one pass (vs. a per-post cache scan).
+  const likesByShortcode = new Map();
   for (const [apiCode, data] of cache) {
-    for (const domSc of domShortcodes) {
-      if (apiCode.startsWith(domSc)) {
-        out.push({ shortcode: apiCode, likes: data.likes });
-        break;
-      }
-    }
+    const sc = apiCode.slice(0, 11);
+    if (!likesByShortcode.has(sc)) likesByShortcode.set(sc, data.likes);
+  }
+  const out = [];
+  for (const [sc, offset] of offsets) {
+    const likes = likesByShortcode.get(sc);
+    if (likes != null) out.push({ shortcode: sc, likes, offset });
   }
   return out.sort((a, b) => b.likes - a.likes);
 }
 
 // Focus state — tracked by shortcode so we can re-apply the class + label after
-// IG re-renders the post's parent (virtualization + batch loads remove them).
+// IG re-renders the post's parent (virtualization + batch loads remove them). The
+// highlight persists until the next cycle, so the observer stays live; coalesce
+// its callback to one re-apply per frame to stay cheap on IG's busy DOM.
 let focusedShortcode = null;
-let focusedLabel = null;
-let focusTimer = null;
-const focusObserver = new MutationObserver(() => applyFocusToDOM());
+let focusedLabelHTML = null;
+let focusedHost = null;
+let applyScheduled = false;
+const focusObserver = new MutationObserver(() => {
+  if (applyScheduled) return;
+  applyScheduled = true;
+  requestAnimationFrame(() => { applyScheduled = false; applyFocusToDOM(); });
+});
 
 function applyFocusToDOM() {
   if (!focusedShortcode) return;
-  const link = findLinkByApiCode(focusedShortcode);
+  // Fast path: while the highlighted tile is still on screen there's nothing to
+  // do, so skip re-scanning the DOM on every mutation. We only re-resolve once IG
+  // virtualizes the tile away (host detached / our label stripped) and re-renders.
+  if (focusedHost && focusedHost.isConnected && focusedHost.querySelector(':scope > .igrb-focus-label')) return;
+  const link = findLinkByShortcode(focusedShortcode);
   if (!link) return;
-  const host = link.parentElement || link;
-  if (!host.classList.contains(FOCUS_CLASS)) host.classList.add(FOCUS_CLASS);
-
-  let lbl = host.querySelector(':scope > .igrb-focus-label');
-  if (!lbl) {
-    lbl = document.createElement('div');
-    lbl.className = 'igrb-focus-label';
-    host.appendChild(lbl);
-  }
-  if (lbl.textContent !== focusedLabel) lbl.textContent = focusedLabel;
+  focusedHost = link.parentElement || link;
+  focusedHost.classList.add(FOCUS_CLASS);
+  const lbl = document.createElement('div');
+  lbl.className = 'igrb-focus-label';
+  lbl.innerHTML = focusedLabelHTML;
+  focusedHost.appendChild(lbl);
 }
 
 function clearAllFocus() {
@@ -145,22 +181,26 @@ function clearAllFocus() {
   document.querySelectorAll('.igrb-focus-label').forEach((el) => el.remove());
 }
 
-function setFocus(apiShortcode, label) {
+function clearFocus() {
+  focusObserver.disconnect();
+  focusedShortcode = null;
+  focusedHost = null;
   clearAllFocus();
-  if (focusTimer) clearTimeout(focusTimer);
-  focusedShortcode = apiShortcode;
-  focusedLabel = label;
+}
+
+function setFocus(shortcode, rank, likes) {
+  clearAllFocus();
+  focusedShortcode = shortcode;
+  focusedHost = null;
+  focusedLabelHTML =
+    `<span class="igrb-rank">#${rank}</span>` +
+    `<span class="igrb-likes"><span class="igrb-heart">♥</span>${formatLikes(likes)}</span>`;
   applyFocusToDOM();
   focusObserver.observe(document.body, { childList: true, subtree: true });
-  focusTimer = setTimeout(() => {
-    focusObserver.disconnect();
-    focusedShortcode = null;
-    focusedLabel = null;
-    clearAllFocus();
-  }, FOCUS_DURATION_MS);
 }
 
 function cycleToRank(direction) {
+  captureOffsets();
   const ranked = getRanked();
   if (!ranked.length) {
     console.log(LOG, 'cycle', direction, '— no ranked items (cache:', cache.size, ')');
@@ -177,11 +217,17 @@ function cycleToRank(direction) {
   currentShortcode = target.shortcode;
   console.log(LOG, direction, '→ #' + (idx + 1) + '/' + ranked.length, '❤', target.likes);
 
-  const link = findLinkByApiCode(target.shortcode);
-  if (link) link.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const link = findLinkByShortcode(target.shortcode);
+  if (link) {
+    link.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    // Virtualized out of the grid — smooth-scroll to its remembered position; the
+    // observer applies the highlight once IG renders the tile there.
+    window.scrollTo({ top: Math.max(0, target.offset - window.innerHeight / 2), behavior: 'smooth' });
+  }
   // Set focus even if link not yet in DOM — the observer will apply the class
   // once IG renders it after our scroll lands.
-  setFocus(target.shortcode, `#${idx + 1} · ❤ ${target.likes}`);
+  setFocus(target.shortcode, idx + 1, target.likes);
 }
 
 document.addEventListener('keydown', (e) => {
@@ -192,6 +238,10 @@ document.addEventListener('keydown', (e) => {
 });
 
 drainBuffer();
+// Remember positions as the user scrolls, plus once shortly after load to grab
+// the initial grid (incl. pinned posts) before any scroll happens.
+window.addEventListener('scroll', scheduleCapture, { passive: true });
+setTimeout(captureOffsets, 1500);
 // Tell page-script it can stop re-serializing the buffer tag — live events
 // are now flowing through the addEventListener above.
 document.documentElement.dataset.igrbDrained = '1';
