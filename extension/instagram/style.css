@@ -1,29 +1,34 @@
 /* Persistent, prominent highlight + rank/likes pill on the post cycled to via
  * ] / [. Stays until the next cycle. !important throughout because IG sets its
- * own styles at higher specificity. The tile lifts, rings in IG-red, and pulses
- * so it's unmistakable even on a busy grid. */
+ * own styles at higher specificity. The tile lifts and pulses once on arrival,
+ * then holds a steady IG-red ring so it's unmistakable on a busy grid. */
 .igrb-focused {
+  --igrb-red: #ff3040;
+  --igrb-red-rgb: 255, 48, 64;
   border-radius: 8px !important;
   transform: scale(1.035) !important;
   z-index: 100 !important;
   position: relative !important;
-  animation: igrb-pulse 1.8s ease-in-out infinite !important;
+  animation: igrb-pulse-once 0.9s ease-in-out forwards !important;
   transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1) !important;
 }
 
-@keyframes igrb-pulse {
+/* One pulse on arrival; `forwards` holds the resting ring (0%/100%) afterward.
+ * box-shadow lives only in the keyframes so it isn't out-ranked by an !important
+ * static declaration — CSS animations lose to important author rules. */
+@keyframes igrb-pulse-once {
   0%, 100% {
     box-shadow:
       inset 0 0 0 3px #fff,
-      0 0 0 4px #ff3040,
-      0 0 18px 2px rgba(255, 48, 64, 0.6),
+      0 0 0 4px var(--igrb-red),
+      0 0 18px 2px rgba(var(--igrb-red-rgb), 0.6),
       0 18px 44px rgba(0, 0, 0, 0.5);
   }
   50% {
     box-shadow:
       inset 0 0 0 3px #fff,
-      0 0 0 5px #ff3040,
-      0 0 34px 7px rgba(255, 48, 64, 0.95),
+      0 0 0 5px var(--igrb-red),
+      0 0 34px 7px rgba(var(--igrb-red-rgb), 0.95),
       0 18px 44px rgba(0, 0, 0, 0.5);
   }
 }
@@ -68,7 +73,7 @@
 }
 
 .igrb-heart {
-  color: #ff3040;
+  color: var(--igrb-red);
   font-size: 16px;
   line-height: 1;
 }
