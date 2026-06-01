@@ -130,9 +130,11 @@ function scheduleCapture() {
 // scrolls out of the DOM. Suggested / cross-profile cache entries are excluded
 // for free: they never get a rendered link, so they never enter `offsets`.
 function getRanked() {
-  // Index likes by the 11-char URL shortcode. IG sometimes keys a post under a
-  // longer `code`, but the shortcode is always its prefix, so slicing collapses
-  // both keyings onto the DOM shortcode in one pass (vs. a per-post cache scan).
+  // Canonicalize keys to their 11-char shortcode prefix before matching: both the
+  // cache and the grid href can carry IG's longer ~40-char `code` instead of the
+  // shortcode (the long form shows up in private-profile links). The shortcode is
+  // always the prefix, so slice BOTH sides — slicing only the cache (the prior
+  // bug) left long-code offsets keys unmatchable and silently emptied the ranking.
   const likesByShortcode = new Map();
   for (const [apiCode, data] of cache) {
     const sc = apiCode.slice(0, 11);
@@ -140,7 +142,7 @@ function getRanked() {
   }
   const out = [];
   for (const [sc, offset] of offsets) {
-    const likes = likesByShortcode.get(sc);
+    const likes = likesByShortcode.get(sc.slice(0, 11));
     if (likes != null) out.push({ shortcode: sc, likes, offset });
   }
   return out.sort((a, b) => b.likes - a.likes);
