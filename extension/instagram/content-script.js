@@ -102,9 +102,16 @@ function findLinkByShortcode(sc) {
 
 // Record the absolute Y of every grid link we haven't seen before. Capturing on
 // first sight (rather than at rank time) keeps a post rankable — and scrollable-to
-// — after IG virtualizes its tile away. A path change means we've moved to a
-// different feed, so the old positions are void.
+// — after IG virtualizes its tile away. A move to a different *feed* (profile/tab)
+// voids the old positions; a post modal does not (see below).
 function captureOffsets() {
+  // Opening a post overlays a /p/, /reel/ or /tv/ modal and pushes its permalink to
+  // the URL, but the grid behind is the same feed we already captured. Bail so we
+  // don't (a) mistake it for a feed change and wipe currentShortcode + offsets —
+  // which restarts cycling from #1 the moment you open and close a post — or
+  // (b) record the modal's own links as feed positions.
+  if (POST_HREF_REGEX.test(location.pathname)) return;
+
   if (location.pathname !== feedKey) {
     feedKey = location.pathname;
     offsets.clear();
