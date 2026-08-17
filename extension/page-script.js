@@ -1,49 +1,36 @@
 // Runs in MAIN world — watches for data-ytrb-dismiss attribute set by content script
 
-const MENU_ITEM_SELECTOR = 'yt-list-item-view-model[role="menuitem"], ytd-menu-service-item-renderer';
+// YT moved role="menuitem" from yt-list-item-view-model onto an inner <button>.
+const MENU_ITEM_SELECTOR = '[role="menuitem"], ytd-menu-service-item-renderer';
 const MENU_BUTTON_SELECTOR = 'button[aria-label="More actions"], button[aria-label="Action menu"]';
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function waitForElement(predicate, timeoutMs = 3000) {
+// The item is in the DOM ~1 frame before it is laid out, and clicking it before
+// then is a no-op — so poll per frame for one that is actually rendered.
+function waitForMenuItem(predicate, timeoutMs = 3000) {
   return new Promise((resolve) => {
-    const existing = [...document.querySelectorAll(MENU_ITEM_SELECTOR)].find(predicate);
-    if (existing) return resolve(existing);
-
-    const obs = new MutationObserver(() => {
-      const found = [...document.querySelectorAll(MENU_ITEM_SELECTOR)].find(predicate);
-      if (found) { obs.disconnect(); clearTimeout(timer); resolve(found); }
-    });
-    obs.observe(document.body, { childList: true, subtree: true });
-    const timer = setTimeout(() => { obs.disconnect(); resolve(null); }, timeoutMs);
+    const deadline = performance.now() + timeoutMs;
+    const tick = () => {
+      const found = [...document.querySelectorAll(MENU_ITEM_SELECTOR)].find(
+        (el) => predicate(el) && el.offsetParent && el.getBoundingClientRect().height > 0
+      );
+      if (found) return resolve(found);
+      if (performance.now() > deadline) return resolve(null);
+      requestAnimationFrame(tick);
+    };
+    tick();
   });
-}
-
-// YT scrolls the page when opening the menu; pin scroll so the user's view stays put.
-function lockScroll() {
-  const y = window.scrollY;
-  const handler = () => window.scrollTo({ top: y, behavior: 'instant' });
-  window.addEventListener('scroll', handler);
-  return () => window.removeEventListener('scroll', handler);
 }
 
 async function dismissContainer(container) {
   const menuButton = container.querySelector(MENU_BUTTON_SELECTOR);
   if (!menuButton) return;
 
-  await sleep(500);
-  const unlock = lockScroll();
-  try {
-    menuButton.click();
-    const item = await waitForElement((el) => el.textContent?.toLowerCase().includes('not interested'));
-    if (!item) return;
-    await sleep(100);
-    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-      item.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, view: window }));
-    }
-    await sleep(500);
-  } finally {
-    unlock();
+  menuButton.click();
+  const item = await waitForMenuItem((el) => el.textContent?.toLowerCase().includes('not interested'));
+  if (!item) return;
+
+  for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+    item.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, view: window }));
   }
 }
 

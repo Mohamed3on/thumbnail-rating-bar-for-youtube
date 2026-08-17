@@ -123,10 +123,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 const NOT_INTERESTED_KEYWORDS = ['not interested'];
-const MENU_ITEM_SELECTORS = [
-  'yt-list-item-view-model[role="menuitem"]',
-  'ytd-menu-service-item-renderer',
-].join(',');
+// YT moved role="menuitem" from yt-list-item-view-model onto an inner <button>.
+const MENU_ITEM_SELECTORS = ['[role="menuitem"]', 'ytd-menu-service-item-renderer'].join(',');
 
 function isNotInterestedMenuItem(element) {
   if (!element) {
