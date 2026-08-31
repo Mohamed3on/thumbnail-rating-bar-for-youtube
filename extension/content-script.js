@@ -12,8 +12,9 @@
 let mutationTimeout;
 let highestScoreTimeout;
 
+// Element tags, not classes: YouTube renames the overlay CSS classes often.
 const WATCHED_THUMBNAIL_SELECTOR =
-  '.ytThumbnailOverlayProgressBarHostWatchedProgressBarSegment, ytd-thumbnail-overlay-resume-playback-renderer';
+  'ytw-thumbnail-overlay-resume-playback-renderer, yt-thumbnail-overlay-progress-bar-view-model';
 
 const LOCKUP_CONTAINER_SELECTOR =
   'yt-lockup-view-model, ytd-compact-video-renderer, ytd-rich-item-renderer, ytd-video-renderer';
