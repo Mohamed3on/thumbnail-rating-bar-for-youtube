@@ -17,10 +17,9 @@ const WATCHED_THUMBNAIL_SELECTOR =
   'ytw-thumbnail-overlay-resume-playback-renderer, yt-thumbnail-overlay-progress-bar-view-model';
 
 const LOCKUP_CONTAINER_SELECTOR =
-  'yt-lockup-view-model, ytd-compact-video-renderer, ytd-rich-item-renderer, ytd-video-renderer';
+  'yt-lockup-view-model, ytd-rich-item-renderer, ytd-video-renderer';
 
-const LOCKUP_TITLE_SELECTOR =
-  '#video-title, .yt-lockup-metadata-view-model__title span, .ytLockupMetadataViewModelTitle span';
+const LOCKUP_TITLE_SELECTOR = '#video-title, .ytLockupMetadataViewModelTitle span';
 
 // Track current element in ranked video list for cycling (all videos vs unwatched only)
 let currentRankedElement = null;
@@ -59,7 +58,9 @@ const scrollToRankedVideo = (direction, { unwatchedOnly = false } = {}) => {
   else currentRankedElement = ranked[idx];
 
   const target = ranked[idx];
-  const thumbnail = target.closest('yt-thumbnail-view-model, a#thumbnail, a.yt-lockup-view-model__content-image, a.ytLockupViewModelContentImage');
+  const thumbnail = target.closest(
+    'yt-thumbnail-view-model, a#thumbnail, a.ytLockupViewModelContentImage'
+  );
 
   // Remove previous highlight and badge
   document.querySelectorAll('.ytrb-current-focus').forEach((el) => el.classList.remove('ytrb-current-focus'));
@@ -228,16 +229,13 @@ const THUMBNAIL_SELECTOR = [
   'a#thumbnail[href*="/watch?v="]',
   'a#thumbnail[href*="/live/"]',
   'a#thumbnail[href*="/shorts/"]',
-  'a.yt-lockup-view-model__content-image[href*="/watch?v="]',
-  'a.yt-lockup-view-model__content-image[href*="/live/"]',
   'a.ytLockupViewModelContentImage[href*="/watch?v="]',
   'a.ytLockupViewModelContentImage[href*="/live/"]',
   'a.shortsLockupViewModelHostEndpoint[href*="/shorts/"]',
   'a.ytp-videowall-still[href]',
 ].join(',');
 
-const WATCHED_CONTAINER_SELECTOR =
-  'ytd-rich-grid-media, ytd-video-renderer, .yt-lockup-view-model-wiz, .ytLockupViewModelHost';
+const WATCHED_CONTAINER_SELECTOR = 'ytd-video-renderer, .ytLockupViewModelHost';
 
 let addedFindBestThumbnailButton = false;
 
@@ -407,7 +405,7 @@ function isShortVideo(thumbnailElement) {
 
   // Check for shorts-specific classes or containers
   const shortsContainer = thumbnailElement.closest(
-    'ytd-reel-item-renderer, ytd-shorts-lockup-view-model, ytm-shorts-lockup-view-model, .shortsLockupViewModelHostEndpoint'
+    'ytm-shorts-lockup-view-model, .shortsLockupViewModelHostEndpoint'
   );
   if (shortsContainer) {
     return true;
@@ -425,9 +423,7 @@ function addRatingBar(thumbnailElement, videoData, videoId) {
   let targetContainer = thumbnailElement.closest('yt-thumbnail-view-model');
   if (!targetContainer) {
     // Fallback to the link container or parent
-    targetContainer = thumbnailElement.closest(
-      'a#thumbnail, a.yt-lockup-view-model__content-image, a.ytLockupViewModelContentImage'
-    );
+    targetContainer = thumbnailElement.closest('a#thumbnail, a.ytLockupViewModelContentImage');
     if (!targetContainer) {
       targetContainer = thumbnailElement.parentElement;
     }
@@ -440,33 +436,27 @@ function addRatingBar(thumbnailElement, videoData, videoId) {
   // skip trying to add a rating bar after it. Also the code we use below to
   // add the rating bar after the thumbnail requires the parent to exist.
   if (targetContainer) {
-    const isPlaylist = !!targetContainer.querySelector(
-      'ytd-thumbnail-overlay-side-panel-renderer, ytd-thumbnail-overlay-bottom-panel-renderer'
-    );
     const isShort = isShortVideo(targetContainer);
 
-    // don't add rating bar to playlists as they're not actual videos
-    if (!isPlaylist) {
-      // IMPORTANT: Remove any existing rating elements to prevent duplicates
-      // This handles both:
-      // 1. Duplicate processing of the same video
-      // 2. DOM element reuse when YouTube reuses thumbnail elements for different videos
-      targetContainer.querySelectorAll('ytrb-score-bar, ytrb-bar').forEach((el) => el.remove());
+    // IMPORTANT: Remove any existing rating elements to prevent duplicates
+    // This handles both:
+    // 1. Duplicate processing of the same video
+    // 2. DOM element reuse when YouTube reuses thumbnail elements for different videos
+    targetContainer.querySelectorAll('ytrb-score-bar, ytrb-bar').forEach((el) => el.remove());
 
-      // Render immediately with watched=false, then update async when watch bar loads
-      const watched = isVideoWatched(targetContainer);
-      const scoreEl = getRatingScoreElement({ score: videoData.score, watched, isShort });
-      targetContainer.appendChild(scoreEl);
-      targetContainer.appendChild(getRatingBarElement(videoData));
+    // Render immediately with watched=false, then update async when watch bar loads
+    const watched = isVideoWatched(targetContainer);
+    const scoreEl = getRatingScoreElement({ score: videoData.score, watched, isShort });
+    targetContainer.appendChild(scoreEl);
+    targetContainer.appendChild(getRatingBarElement(videoData));
 
-      if (!watched) {
-        deferWatchedCheck(targetContainer, scoreEl);
-      }
-
-      // Track which video's rating this element is currently showing
-      // This allows detection of element reuse in future processing
-      targetContainer.dataset.ytrbVideoId = videoId;
+    if (!watched) {
+      deferWatchedCheck(targetContainer, scoreEl);
     }
+
+    // Track which video's rating this element is currently showing
+    // This allows detection of element reuse in future processing
+    targetContainer.dataset.ytrbVideoId = videoId;
   }
 }
 
@@ -511,12 +501,6 @@ function removeOldPercentages(element) {
 // - The CSS selector for the metadata line element.
 // - The classes that should be added to the inserted percentage text span.
 const METADATA_LINE_DATA_DESKTOP = [
-  // - Homepage videos
-  [
-    'ytd-rich-grid-media',
-    '#metadata-line',
-    'style-scope ytd-video-meta-block ytd-grid-video-renderer',
-  ],
   // - Search result videos
   // - Search result Shorts listed individually
   [
@@ -533,13 +517,7 @@ const METADATA_LINE_DATA_DESKTOP = [
     '.shortsLockupViewModelHostMetadataSubhead',
     'yt-core-attributed-string yt-core-attributed-string--white-space-pre-wrap',
   ],
-  // - Subscriptions page videos (wiz style)
-  [
-    '.yt-lockup-view-model-wiz',
-    '.yt-content-metadata-view-model-wiz__metadata-row:last-child',
-    'yt-core-attributed-string yt-content-metadata-view-model-wiz__metadata-text yt-core-attributed-string--white-space-pre-wrap yt-core-attributed-string--link-inherit-color',
-  ],
-  // - Watch page sidebar / camelCase lockup style
+  // - Home / subscriptions / watch page sidebar lockups
   [
     '.ytLockupViewModelHost',
     '.ytContentMetadataViewModelMetadataRow:last-of-type',
@@ -646,11 +624,7 @@ function processNewThumbnails() {
 
   for (const link of thumbnailLinks) {
     // Skip mix recommendations and playlists
-    if (
-      link.closest(
-        'yt-collections-stack, ytd-thumbnail-overlay-side-panel-renderer, ytd-thumbnail-overlay-bottom-panel-renderer'
-      )
-    ) {
+    if (link.querySelector('yt-collections-stack')) {
       continue;
     }
 
