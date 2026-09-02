@@ -87,7 +87,7 @@ const scrollToRankedVideo = (direction, { unwatchedOnly = false } = {}) => {
   target.scrollIntoView({ behavior: 'smooth', block: 'center' });
 };
 
-// Dismiss the top-ranked video and scroll to next best
+// Dismiss the top-ranked video; we scroll to the next best once YT's menu has closed
 function dismissTopVideo() {
   const el = document.querySelector('#highest-score');
   if (!el) return;
@@ -101,8 +101,11 @@ function dismissTopVideo() {
   el.id = 'watched';
   HIGHEST_SCORE = 0; // force updateHighestScoreMarker to reset cycling state
   updateHighestScoreMarker();
-  scrollToRankedVideo('forward', { unwatchedOnly: true });
 }
+
+// page-script.js fires this once the menu has closed: scrolling while it is
+// open is undone by its scroll lock (see dismissContainer there)
+document.addEventListener('ytrb-dismissed', () => scrollToRankedVideo('forward', { unwatchedOnly: true }));
 
 // Add keyboard shortcut listener
 // ] / [ = cycle unwatched, } / { (Shift+]/[) = cycle all, n = dismiss top video
@@ -154,6 +157,9 @@ function refreshHighestScoreAfterNotInterested() {
 }
 
 function handleMenuActivation(event) {
+  // Our own dismissals (synthetic clicks from page-script.js) are handled by dismissTopVideo
+  if (!event.isTrusted) return;
+
   const menuItem = event.target.closest(MENU_ITEM_SELECTORS);
   if (!menuItem) {
     return;

@@ -4,15 +4,12 @@
 const MENU_ITEM_SELECTOR = '[role="menuitem"], ytd-menu-service-item-renderer';
 const MENU_BUTTON_SELECTOR = 'button[aria-label="More actions"], button[aria-label="Action menu"]';
 
-// The item is in the DOM ~1 frame before it is laid out, and clicking it before
-// then is a no-op — so poll per frame for one that is actually rendered.
-function waitForMenuItem(predicate, timeoutMs = 3000) {
+// Poll per frame until `find` returns something truthy (or the timeout passes).
+function waitFor(find, timeoutMs = 3000) {
   return new Promise((resolve) => {
     const deadline = performance.now() + timeoutMs;
     const tick = () => {
-      const found = [...document.querySelectorAll(MENU_ITEM_SELECTOR)].find(
-        (el) => predicate(el) && el.offsetParent && el.getBoundingClientRect().height > 0
-      );
+      const found = find();
       if (found) return resolve(found);
       if (performance.now() > deadline) return resolve(null);
       requestAnimationFrame(tick);
@@ -21,17 +18,37 @@ function waitForMenuItem(predicate, timeoutMs = 3000) {
   });
 }
 
+// The item is in the DOM ~1 frame before it is laid out, and clicking it before
+// then is a no-op — so only accept one that is actually rendered.
+const findNotInterestedItem = () =>
+  [...document.querySelectorAll(MENU_ITEM_SELECTOR)].find(
+    (el) =>
+      el.textContent?.toLowerCase().includes('not interested') &&
+      el.offsetParent &&
+      el.getBoundingClientRect().height > 0
+  );
+
 async function dismissContainer(container) {
   const menuButton = container.querySelector(MENU_BUTTON_SELECTOR);
-  if (!menuButton) return;
-
-  menuButton.click();
-  const item = await waitForMenuItem((el) => el.textContent?.toLowerCase().includes('not interested'));
-  if (!item) return;
-
-  for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-    item.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, view: window }));
+  if (menuButton) {
+    // The menu restores focus to the active element when it closes, which
+    // scrolls the page back to it (usually the player).
+    document.activeElement.blur();
+    menuButton.click();
+    const item = await waitFor(findNotInterestedItem);
+    if (item) {
+      for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+        item.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, view: window }));
+      }
+      // While open, the menu (a tp-yt-iron-dropdown with scroll-action="lock")
+      // snaps the page back to its opening scroll position on every scroll
+      // event, which kills any scroll started before it has closed.
+      const dropdown = item.closest('tp-yt-iron-dropdown');
+      await waitFor(() => !dropdown || dropdown.style.display === 'none', 1000);
+    }
   }
+  // The content script scrolls to the next best video on this.
+  document.dispatchEvent(new Event('ytrb-dismissed'));
 }
 
 new MutationObserver((mutations) => {
