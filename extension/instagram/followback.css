@@ -1,0 +1,466 @@
+/* Follow-back: a quiet stat beside your own profile's follower counts, and a
+ * dialog built like IG's own followers dialog. Colours come from IG's theme
+ * variables (bare RGB triplets), so everything follows its light/dark mode. */
+
+.igfb-chip {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  line-height: 18px;
+  color: rgb(var(--ig-secondary-text));
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.igfb-chip:hover {
+  color: rgb(var(--ig-primary-text));
+}
+
+.igfb-chip:focus-visible {
+  outline: 2px solid rgb(var(--ig-primary-button));
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.igfb-chip b {
+  font-weight: 600;
+  color: rgb(var(--ig-primary-text));
+}
+
+.igfb-unseen {
+  font-weight: 600;
+  color: rgb(var(--ig-badge));
+}
+
+.igfb-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(45deg, #f09433, #dc2743, #bc1888);
+  clip-path: circle(3px);
+}
+
+.igfb-spinner {
+  display: block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: rgb(var(--ig-secondary-text));
+}
+
+.igfb-spinner svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  animation: igfb-spin 0.8s steps(8) infinite;
+}
+
+/* Dialog */
+
+.igfb-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.65);
+  animation: igfb-fade 0.15s ease-out;
+}
+
+.igfb-card {
+  display: flex;
+  flex-direction: column;
+  width: min(480px, 100%);
+  height: min(440px, calc(100vh - 32px));
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgb(var(--ig-elevated-background));
+  color: rgb(var(--ig-primary-text));
+  font-size: 14px;
+  line-height: 18px;
+  outline: none;
+  animation: igfb-pop 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.igfb-card ::selection {
+  background: rgba(var(--ig-primary-button), 0.25);
+}
+
+.igfb-card [hidden] {
+  display: none;
+}
+
+.igfb-card button {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.igfb-card button:focus-visible {
+  outline: 2px solid rgb(var(--ig-primary-button));
+  outline-offset: -2px;
+}
+
+.igfb-head {
+  display: grid;
+  grid-template-columns: 48px 1fr 48px;
+  align-items: center;
+  flex: none;
+  height: 56px;
+  padding: 0 4px;
+}
+
+.igfb-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.igfb-status {
+  max-width: 100%;
+  height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: rgb(var(--ig-secondary-text));
+  font-variant-numeric: tabular-nums;
+}
+
+.igfb-card .igfb-icon-btn {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: rgb(var(--ig-primary-text));
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.igfb-card .igfb-icon-btn:hover {
+  background: rgba(var(--ig-hover-overlay));
+}
+
+.igfb-card .igfb-icon-btn:disabled {
+  background: none;
+  color: rgb(var(--ig-secondary-text));
+  cursor: default;
+}
+
+.igfb-icon-btn svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.igfb-refresh svg {
+  width: 19px;
+  height: 19px;
+}
+
+.igfb-refresh:disabled svg {
+  animation: igfb-spin 0.9s linear infinite;
+}
+
+.igfb-nav {
+  position: relative;
+  flex: none;
+}
+
+/* Scrolls sideways when the labels outgrow a narrow window; the separator is an
+ * inset shadow so the active tab's underline can sit on top of it. */
+.igfb-tabs {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  box-shadow: inset 0 -1px rgb(var(--ig-separator));
+}
+
+.igfb-card .igfb-tab {
+  display: flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 10px;
+  border-bottom: 2px solid transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgb(var(--ig-secondary-text));
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.igfb-card .igfb-tab:hover,
+.igfb-card .igfb-tab[aria-selected='true'] {
+  color: rgb(var(--ig-primary-text));
+}
+
+.igfb-card .igfb-tab[aria-selected='true'] {
+  border-bottom-color: currentColor;
+}
+
+.igfb-tab-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgb(var(--ig-badge));
+}
+
+.igfb-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, #f09433, #dc2743, #bc1888);
+  transform-origin: left;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.igfb-search {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  margin: 12px 16px 4px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgb(var(--ig-secondary-background));
+  color: rgb(var(--ig-secondary-text));
+  cursor: text;
+}
+
+.igfb-search svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.igfb-search input {
+  all: unset;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  font-size: 14px;
+  color: rgb(var(--ig-primary-text));
+  caret-color: rgb(var(--ig-primary-text));
+}
+
+.igfb-search input::placeholder {
+  color: rgb(var(--ig-secondary-text));
+}
+
+.igfb-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.igfb-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 4px 0 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--ig-secondary-text), 0.35) transparent;
+}
+
+.igfb-row {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.1s;
+}
+
+.igfb-row:hover {
+  background: rgba(var(--ig-hover-overlay));
+}
+
+.igfb-row:focus-visible {
+  outline: 2px solid rgb(var(--ig-primary-button));
+  outline-offset: -2px;
+}
+
+.igfb-avatar {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: rgb(var(--ig-secondary-background));
+  color: rgb(var(--ig-secondary-text));
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.igfb-avatar::before {
+  content: attr(data-initial);
+}
+
+.igfb-avatar:has(img)::before {
+  content: none;
+}
+
+.igfb-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.igfb-names {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.igfb-user,
+.igfb-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Set on the text itself: IG's own a:visited colour would otherwise win. */
+.igfb-user {
+  font-weight: 600;
+  color: rgb(var(--ig-primary-text));
+}
+
+.igfb-sub {
+  display: flex;
+  min-width: 0;
+  color: rgb(var(--ig-secondary-text));
+}
+
+.igfb-time {
+  flex: none;
+  white-space: pre;
+}
+
+.igfb-tag {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgb(var(--ig-secondary-background));
+  color: rgb(var(--ig-secondary-text));
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.igfb-unread {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgb(var(--ig-primary-button));
+}
+
+.igfb-note,
+.igfb-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.igfb-note {
+  padding: 12px 16px;
+  text-align: center;
+  color: rgb(var(--ig-secondary-text));
+}
+
+.igfb-error {
+  padding: 6px 16px 8px;
+  color: rgb(var(--ig-error-or-destructive));
+}
+
+.igfb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 300px;
+  margin: auto;
+  padding: 24px;
+  text-align: center;
+  text-wrap: balance;
+  color: rgb(var(--ig-secondary-text));
+}
+
+.igfb-empty .igfb-spinner {
+  width: 32px;
+  height: 32px;
+}
+
+.igfb-card .igfb-btn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: rgb(var(--ig-secondary-background));
+  color: rgb(var(--ig-primary-text));
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 32px;
+  transition: box-shadow 0.15s;
+}
+
+.igfb-card .igfb-btn:hover {
+  box-shadow: inset 0 0 0 99px rgba(var(--ig-hover-overlay));
+}
+
+@keyframes igfb-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes igfb-fade {
+  from { opacity: 0; }
+}
+
+@keyframes igfb-pop {
+  from { opacity: 0; transform: scale(0.96); }
+}
+
+@media (max-width: 512px) {
+  .igfb-card .igfb-tab {
+    padding: 0 8px;
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .igfb-backdrop,
+  .igfb-card {
+    animation: none;
+  }
+
+  .igfb-bar {
+    transition: none;
+  }
+}
