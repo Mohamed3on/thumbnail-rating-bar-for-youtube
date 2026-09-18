@@ -49,7 +49,7 @@
       "matches": [
         "*://*.instagram.com/*"
       ],
-      "js": ["instagram/content-script.js", "instagram/followback.js"],
+      "js": ["instagram/content-script.js", "instagram/followback.js", "instagram/mutuals.js"],
       "css": ["instagram/style.css", "instagram/followback.css"],
       "run_at": "document_end"
     }

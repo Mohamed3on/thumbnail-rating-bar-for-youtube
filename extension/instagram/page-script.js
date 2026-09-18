@@ -9,6 +9,9 @@
  *      that the content script drains on startup.
  *   2. Dispatches a `CustomEvent` with the new items serialized as a JSON
  *      string in `detail` (strings cross worlds reliably; raw objects do not).
+ *
+ * It also pulls the mutual-follower count off Discover People's suggestions, which
+ * mutuals.js sorts that page by.
  */
 
 (() => {
@@ -80,14 +83,49 @@
 
   function dispatch(text) {
     if (!text || text.length < 50) return;
-    if (!text.includes('like_count') && !text.includes('edge_liked_by') && !text.includes('edge_media_preview_like')) return;
+    const likes = text.includes('like_count') || text.includes('edge_liked_by') || text.includes('edge_media_preview_like');
+    const suggestions = text.includes('suggested_users');
+    if (!likes && !suggestions) return;
     let json;
     try { json = JSON.parse(text); }
     catch (e) { console.warn('[igrb] response parse failed:', e); return; }
+    if (suggestions) collectSuggested(json);
+    if (!likes) return;
     const items = [];
     walk(json, items, new WeakSet());
     emit(items);
   }
+
+  // /explore/people/ arrives as a single response holding every suggestion, each
+  // carrying the "Followed by marcusolivix and 12 more" line its row renders. That
+  // sentence is the only count IG gives — nothing in the payload is a number — and
+  // it comes two ways ("and 12 more", "+ 45 more"), so both are read here. The
+  // facepile is what says whether there are mutuals at all, which the "Suggested
+  // for you" rows have none of, and it doesn't go through English to say it.
+  const MORE = /(?:and|\+) ([\d.,]+[KM]?) more$/;
+  const suggested = {}; // username → mutual followers
+
+  const scale = (s) => parseFloat(s.replace(/,/g, '')) * (/K$/i.test(s) ? 1e3 : /M$/i.test(s) ? 1e6 : 1);
+
+  function collectSuggested(json) {
+    const list = json?.suggested_users?.suggestions;
+    if (!Array.isArray(list)) return;
+    for (const item of list) {
+      const username = item?.user?.username;
+      if (!username) continue;
+      const more = item.social_context?.match(MORE);
+      // The named account is the +1 the sentence leaves implicit.
+      suggested[username] = item.social_context_facepile_users?.length ? 1 + (more ? scale(more[1]) : 0) : 0;
+    }
+    announceSuggested();
+  }
+
+  // The suggestions can land before the content script is listening, so it can ask.
+  function announceSuggested() {
+    document.dispatchEvent(new CustomEvent('igrb-suggested', { detail: JSON.stringify(suggested) }));
+  }
+
+  document.addEventListener('igrb-suggested-ask', announceSuggested);
 
   function scanInitialScripts() {
     for (const script of document.querySelectorAll('script[type="application/json"]')) {
