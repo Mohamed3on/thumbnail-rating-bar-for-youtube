@@ -383,20 +383,10 @@
   background: rgb(var(--ig-primary-button));
 }
 
-.igfb-note,
 .igfb-error {
   margin: 0;
   font-size: 12px;
   line-height: 16px;
-}
-
-.igfb-note {
-  padding: 12px 16px;
-  text-align: center;
-  color: rgb(var(--ig-secondary-text));
-}
-
-.igfb-error {
   padding: 6px 16px 8px;
   color: rgb(var(--ig-error-or-destructive));
 }

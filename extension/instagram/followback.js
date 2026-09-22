@@ -6,7 +6,8 @@
  * background when they're stale: it pages through both follow lists with IG's
  * private API, fetched from inside the page so it rides your logged-in session,
  * and diffs your followers against the previous check to log who unfollowed or
- * followed you.
+ * followed you. Only people you still follow count as unfollowers: an account
+ * that vanished from your following list too deactivated, or you unfollowed it.
  *
  * One snapshot per account in chrome.storage.local under `igfb:<uid>`:
  *   { t, counts: [followers, following], followers: { pk: { u, n, pic } },
@@ -77,20 +78,26 @@
   }
 
   // Pages through a follow list into { pk: { u, n, pic } }. `done` and `all`
-  // span both lists, so the progress bar fills once over the whole check.
+  // span both lists, so the progress bar fills once over the whole check. A short
+  // list would pass off everyone missing from it as an unfollower, or as unfollowed
+  // by you, so it fails the check instead.
   async function fetchList(kind, params, total, done, all) {
     const verb = data ? 'Updating' : 'Loading';
     const users = {};
     let maxId = '';
+    let got = 0;
     do {
       const page = await api(`/api/v1/friendships/${uid}/${kind}/?${params}${maxId && `&max_id=${encodeURIComponent(maxId)}`}`);
       for (const user of page.users) users[user.pk_id ?? user.pk] = { u: user.username, n: user.full_name, pic: user.profile_pic_url };
-      const got = Object.keys(users).length;
+      got = Object.keys(users).length;
       progress = { text: `${verb} ${kind}… ${got.toLocaleString()} of ${total.toLocaleString()}`, pct: (done + got) / all };
       renderStatus();
       maxId = page.next_max_id;
       if (maxId) await sleep(500 + Math.random() * 500);
     } while (maxId);
+    if (got < total - Math.max(5, total * 0.02)) {
+      throw new Error(`Instagram only sent ${got.toLocaleString()} of ${total.toLocaleString()} ${kind}, so nothing changed. Try again in a few minutes.`);
+    }
     return users;
   }
 
@@ -105,16 +112,12 @@
       const all = user.following_count + user.follower_count;
       const following = await fetchList('following', 'count=200', user.following_count, 0, all);
       const followers = await fetchList('followers', 'count=50&search_surface=follow_list_page', user.follower_count, user.following_count, all);
-      const got = Object.keys(followers).length;
-      // A short list would pass off everyone missing from it as an unfollower.
-      if (got < user.follower_count - Math.max(5, user.follower_count * 0.02)) {
-        throw new Error(`Instagram only sent ${got.toLocaleString()} of ${user.follower_count.toLocaleString()} followers, so nothing changed. Try again in a few minutes.`);
-      }
       const prev = (await chrome.storage.local.get(KEY))[KEY];
       const t = Date.now();
       const log = prev?.log ?? [];
       if (prev) {
-        for (const pk in prev.followers) if (!followers[pk]) log.push({ t, type: 'unfollowed', pk, ...prev.followers[pk] });
+        // Gone from your following list too means they deactivated, or you unfollowed them as well.
+        for (const pk in prev.followers) if (!followers[pk] && following[pk]) log.push({ t, type: 'unfollowed', pk, ...prev.followers[pk] });
         for (const pk in followers) if (!prev.followers[pk]) log.push({ t, type: 'followed', pk, ...followers[pk] });
       }
       data = { t, counts: [user.follower_count, user.following_count], followers, following, log: log.slice(-LOG_CAP) };
@@ -132,7 +135,8 @@
     const events = (type) => data.log.filter((e) => e.type === type).reverse();
     return {
       notBack: data.following && Object.entries(data.following).filter(([pk]) => !data.followers[pk]).map(([pk, a]) => ({ pk, ...a })),
-      unfollowed: events('unfollowed'),
+      // Anyone you've unfollowed since, or who deactivated, no longer matters.
+      unfollowed: events('unfollowed').filter((e) => data.following?.[e.pk]),
       followed: events('followed'),
     };
   }
@@ -209,13 +213,12 @@
       : q ? 'No results found.'
       : {
         notBack: l.notBack ? 'Everyone you follow follows you back.' : 'Shows up after your next check.',
-        unfollowed: 'No one has unfollowed you since tracking started.',
+        unfollowed: 'No one you follow has unfollowed you since tracking started.',
         followed: 'No new followers since tracking started.',
       }[tab];
     panel.list.replaceChildren(...kids([
       data && error && h('p', { className: 'igfb-error' }, error),
       rows.map(row),
-      tab === 'unfollowed' && rows.length > 0 && h('p', { className: 'igfb-note' }, 'Some of these may have deactivated their account.'),
       !rows.length && h('div', { className: 'igfb-empty' }, empty),
     ]));
   }
