@@ -264,7 +264,9 @@
     );
     panel.root = h('div', {
       className: 'igfb-backdrop',
-      onclick: (e) => e.target === e.currentTarget && closePanel(),
+      // Only the backdrop itself closes. Written as a statement: a false return from
+      // an on* handler cancels the click, which would keep the rows' links from opening.
+      onclick: (e) => { if (e.target === e.currentTarget) closePanel(); },
       // Escape clears a search first, then closes.
       onkeydown: (e) => {
         if (e.key !== 'Escape') return;
