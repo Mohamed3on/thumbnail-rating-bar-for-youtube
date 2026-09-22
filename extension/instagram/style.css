@@ -82,3 +82,75 @@
   from { opacity: 0; transform: translateY(-6px) scale(0.92); }
   to   { opacity: 1; transform: none; }
 }
+
+/* Home rail suggestions, ranked by mutuals (mutuals.js), styled after IG's rows. */
+.igmu-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.igmu-avatar {
+  display: block;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgb(var(--ig-secondary-background));
+}
+
+.igmu-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.igmu-name {
+  display: block;
+  overflow: hidden;
+  color: rgb(var(--ig-primary-text));
+  font-weight: 600;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.igmu-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgb(var(--ig-secondary-text));
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.igmu-face {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.igmu-context {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.igmu-follow {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgb(var(--ig-primary-button));
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.igmu-follow:disabled {
+  color: rgb(var(--ig-secondary-text));
+  cursor: default;
+}

@@ -10,8 +10,9 @@
  *   2. Dispatches a `CustomEvent` with the new items serialized as a JSON
  *      string in `detail` (strings cross worlds reliably; raw objects do not).
  *
- * It also pulls the mutual-follower count off Discover People's suggestions, which
- * mutuals.js sorts that page by.
+ * It also reads the suggestions responses for mutuals.js, which sorts Discover
+ * People by mutual followers and lists the best of them on the home page, and
+ * makes that request on its behalf there, where IG doesn't.
  */
 
 (() => {
@@ -103,7 +104,7 @@
   // facepile is what says whether there are mutuals at all, which the "Suggested
   // for you" rows have none of, and it doesn't go through English to say it.
   const MORE = /(?:and|\+) ([\d.,]+[KM]?) more$/;
-  const suggested = {}; // username → mutual followers
+  const suggested = {}; // username → { m: mutual followers, pk, n: full name, pic, c: "Followed by…", face: the named account's picture }
 
   const scale = (s) => parseFloat(s.replace(/,/g, '')) * (/K$/i.test(s) ? 1e3 : /M$/i.test(s) ? 1e6 : 1);
 
@@ -111,11 +112,12 @@
     const list = json?.suggested_users?.suggestions;
     if (!Array.isArray(list)) return;
     for (const item of list) {
-      const username = item?.user?.username;
-      if (!username) continue;
+      const user = item?.user;
+      if (!user?.username) continue;
       const more = item.social_context?.match(MORE);
+      const face = item.social_context_facepile_users?.[0];
       // The named account is the +1 the sentence leaves implicit.
-      suggested[username] = item.social_context_facepile_users?.length ? 1 + (more ? scale(more[1]) : 0) : 0;
+      suggested[user.username] = { m: face ? 1 + (more ? scale(more[1]) : 0) : 0, pk: user.pk_id ?? user.pk, n: user.full_name, pic: user.profile_pic_url, c: item.social_context, face: face?.profile_pic_url };
     }
     announceSuggested();
   }
@@ -126,6 +128,23 @@
   }
 
   document.addEventListener('igrb-suggested-ask', announceSuggested);
+
+  // The home page requests no suggestions of its own, so mutuals.js asks for them
+  // here: IG's own Discover People request, which the hooked fetch below then
+  // hands to collectSuggested like any other.
+  document.addEventListener('igrb-suggested-fetch', () => {
+    fetch('/api/v1/discover/ayml/', {
+      method: 'POST',
+      headers: {
+        'x-ig-app-id': '936619743392459',
+        'x-asbd-id': '359341',
+        'x-requested-with': 'XMLHttpRequest',
+        'x-csrftoken': document.cookie.match(/(?:^|; )csrftoken=([^;]*)/)?.[1],
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: 'max_id=%5B%5D&max_number_to_display=30&module=discover_people&paginate=true',
+    }).catch((e) => console.warn('[igrb] suggestions request failed:', e));
+  });
 
   function scanInitialScripts() {
     for (const script of document.querySelectorAll('script[type="application/json"]')) {
