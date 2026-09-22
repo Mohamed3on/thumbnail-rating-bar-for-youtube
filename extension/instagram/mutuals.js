@@ -27,7 +27,7 @@
   const HEADERS = { 'x-ig-app-id': '936619743392459', 'x-requested-with': 'XMLHttpRequest', 'x-asbd-id': '359341' };
   const ROW_PX = 60; // IG's rail rows
 
-  const users = new Map(); // username → { m: mutual followers, pk, n: full name, pic, c: "Followed by…", face }
+  const users = new Map(); // username → { m: mutual followers, pk, n: full name, pic, c: "Followed by…", who, face }
   let updated = 0; // when the current batch arrived
   let asked = 0; // when page-script was last asked for one, so a failure isn't retried on every render
   let queued = false;
@@ -36,7 +36,7 @@
 
   function h(tag, props, ...children) {
     const el = Object.assign(document.createElement(tag), props);
-    el.append(...children.filter(Boolean));
+    el.append(...children.flat().filter(Boolean));
     return el;
   }
 
@@ -121,10 +121,12 @@
       h('a', { href: `/${name}/` }, h('img', { className: 'igmu-avatar', src: u.pic, alt: '' })),
       h('div', { className: 'igmu-text' },
         h('a', { className: 'igmu-name', href: `/${name}/` }, u.n || name),
+        // The count, then the mutual whose face this is: IG's whole sentence adds nothing.
         h('span', { className: 'igmu-sub' },
           u.face && h('img', { className: 'igmu-face', src: u.face, alt: '' }),
-          u.m > 0 && h('b', { className: 'igmu-count' }, `${u.m} mutual${u.m === 1 ? '' : 's'}`),
-          h('span', { className: 'igmu-context' }, `${u.m > 0 ? ' · ' : ''}${u.c || 'Suggested for you'}`))),
+          u.m > 0
+            ? [h('b', { className: 'igmu-count' }, u.m.toLocaleString()), u.who && h('span', { className: 'igmu-context' }, `· ${u.who}`)]
+            : h('span', { className: 'igmu-context' }, u.c || 'Suggested for you'))),
       btn);
   }
 

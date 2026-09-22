@@ -104,7 +104,7 @@
   // facepile is what says whether there are mutuals at all, which the "Suggested
   // for you" rows have none of, and it doesn't go through English to say it.
   const MORE = /(?:and|\+) ([\d.,]+[KM]?) more$/;
-  const suggested = {}; // username → { m: mutual followers, pk, n: full name, pic, c: "Followed by…", face: the named account's picture }
+  const suggested = {}; // username → { m: mutual followers, pk, n: full name, pic, c: "Followed by…", who: a mutual's username, face: their picture }
 
   const scale = (s) => parseFloat(s.replace(/,/g, '')) * (/K$/i.test(s) ? 1e3 : /M$/i.test(s) ? 1e6 : 1);
 
@@ -117,7 +117,7 @@
       const more = item.social_context?.match(MORE);
       const face = item.social_context_facepile_users?.[0];
       // The named account is the +1 the sentence leaves implicit.
-      suggested[user.username] = { m: face ? 1 + (more ? scale(more[1]) : 0) : 0, pk: user.pk_id ?? user.pk, n: user.full_name, pic: user.profile_pic_url, c: item.social_context, face: face?.profile_pic_url };
+      suggested[user.username] = { m: face ? 1 + (more ? scale(more[1]) : 0) : 0, pk: user.pk_id ?? user.pk, n: user.full_name, pic: user.profile_pic_url, c: item.social_context, who: face?.username, face: face?.profile_pic_url };
     }
     announceSuggested();
   }

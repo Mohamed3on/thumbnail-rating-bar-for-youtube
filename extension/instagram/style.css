@@ -138,6 +138,7 @@
   flex: none;
   color: rgb(var(--ig-primary-text));
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .igmu-context {
