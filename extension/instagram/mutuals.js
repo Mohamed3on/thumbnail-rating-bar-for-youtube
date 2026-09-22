@@ -14,7 +14,7 @@
  * are hidden and the suggestions with the most mutuals take their place, Follow
  * button included. That page requests no suggestions itself, so page-script.js is
  * asked for them at most hourly, and the latest batch is kept per account in
- * chrome.storage.local under `igmu:<uid>` as { t, users: { username: {…} } }.
+ * chrome.storage.local under `igmu:<uid>` as { v, t, users: { username: {…} } }.
  */
 (() => {
   const cookie = (name) => document.cookie.match(`(?:^|; )${name}=([^;]*)`)?.[1];
@@ -24,6 +24,7 @@
   const PATH = '/explore/people';
   const KEY = `igmu:${uid}`;
   const FRESH_MS = 60 * 60 * 1000;
+  const VERSION = 2; // of the cached shape: an older batch is refetched rather than shown with gaps
   const HEADERS = { 'x-ig-app-id': '936619743392459', 'x-requested-with': 'XMLHttpRequest', 'x-asbd-id': '359341' };
   const ROW_PX = 60; // IG's rail rows
 
@@ -42,7 +43,7 @@
 
   // Followed accounts are left out so they don't come back on the next visit.
   function save() {
-    chrome.storage.local.set({ [KEY]: { t: updated, users: Object.fromEntries([...users].filter(([, u]) => !u.followed)) } });
+    chrome.storage.local.set({ [KEY]: { v: VERSION, t: updated, users: Object.fromEntries([...users].filter(([, u]) => !u.followed)) } });
   }
 
   // The rows carry no stable class, so anchor on the links IG gives each suggestion
@@ -178,7 +179,7 @@
   async function init() {
     const stored = (await chrome.storage.local.get(KEY))[KEY];
     // Unless a fresher batch already came in from the page.
-    if (stored?.t > updated) {
+    if (stored?.v === VERSION && stored.t > updated) {
       users.clear();
       for (const [name, u] of Object.entries(stored.users)) users.set(name, u);
       updated = stored.t;
