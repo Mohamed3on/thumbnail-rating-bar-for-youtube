@@ -122,11 +122,11 @@
       h('a', { href: `/${name}/` }, h('img', { className: 'igmu-avatar', src: u.pic, alt: '' })),
       h('div', { className: 'igmu-text' },
         h('a', { className: 'igmu-name', href: `/${name}/` }, u.n || name),
-        // The count, then the mutual whose face this is: IG's whole sentence adds nothing.
+        // IG's "Followed by X and 18 more" with the words taken out: X's face, X, +18.
         h('span', { className: 'igmu-sub' },
           u.face && h('img', { className: 'igmu-face', src: u.face, alt: '' }),
-          u.m > 0
-            ? [h('b', { className: 'igmu-count' }, u.m.toLocaleString()), u.who && h('span', { className: 'igmu-context' }, `· ${u.who}`)]
+          u.who
+            ? [h('span', { className: 'igmu-context' }, u.who), u.m > 1 && h('b', { className: 'igmu-count' }, `+${(u.m - 1).toLocaleString()}`)]
             : h('span', { className: 'igmu-context' }, u.c || 'Suggested for you'))),
       btn);
   }
