@@ -107,7 +107,8 @@
   min-width: 0;
 }
 
-.igmu-name {
+.igmu-name,
+.igmu-name:visited {
   display: block;
   overflow: hidden;
   color: rgb(var(--ig-primary-text));
@@ -131,6 +132,12 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
+}
+
+.igmu-count {
+  flex: none;
+  color: rgb(var(--ig-primary-text));
+  font-weight: 600;
 }
 
 .igmu-context {

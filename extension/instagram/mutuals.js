@@ -13,8 +13,7 @@
  * The home page's "Suggested for you" rail gets the same ranking: IG's five picks
  * are hidden and the suggestions with the most mutuals take their place, Follow
  * button included. That page requests no suggestions itself, so page-script.js is
- * asked for them at most hourly, and the latest batch is kept per account in
- * chrome.storage.local under `igmu:<uid>` as { t, users: { username: {…} } }.
+ * asked for a fresh batch each time the rail appears.
  */
 (() => {
   const cookie = (name) => document.cookie.match(`(?:^|; )${name}=([^;]*)`)?.[1];
@@ -22,14 +21,11 @@
   if (!uid) return;
 
   const PATH = '/explore/people';
-  const KEY = `igmu:${uid}`;
-  const FRESH_MS = 60 * 60 * 1000;
   const HEADERS = { 'x-ig-app-id': '936619743392459', 'x-requested-with': 'XMLHttpRequest', 'x-asbd-id': '359341' };
   const ROW_PX = 60; // IG's rail rows
 
   const users = new Map(); // username → { m: mutual followers, pk, n: full name, pic, c: "Followed by…", face }
-  let updated = 0; // when the current batch arrived
-  let asked = 0; // when page-script was last asked for one, so a failure isn't retried on every render
+  let askedFor = null; // the rail list the last batch was requested for, so a re-rendered rail gets a fresh one
   let queued = false;
 
   const username = (link) => link.pathname.match(/^\/([A-Za-z0-9._]+)\/$/)?.[1];
@@ -38,11 +34,6 @@
     const el = Object.assign(document.createElement(tag), props);
     el.append(...children.filter(Boolean));
     return el;
-  }
-
-  // Followed accounts are left out so they don't come back on the next visit.
-  function save() {
-    chrome.storage.local.set({ [KEY]: { t: updated, users: Object.fromEntries([...users].filter(([, u]) => !u.followed)) } });
   }
 
   // The rows carry no stable class, so anchor on the links IG gives each suggestion
@@ -97,8 +88,8 @@
     while (box && box !== document.body && names(box).size < 2) box = box.parentElement;
     const list = box && box !== document.body && [...box.children].find((el) => names(el).size);
     if (!list) return;
-    if (Date.now() - Math.max(updated, asked) > FRESH_MS) {
-      asked = Date.now();
+    if (list !== askedFor) {
+      askedFor = list;
       document.dispatchEvent(new CustomEvent('igrb-suggested-fetch'));
     }
     if (!users.size) return;
@@ -123,7 +114,8 @@
         h('a', { className: 'igmu-name', href: `/${name}/` }, u.n || name),
         h('span', { className: 'igmu-sub' },
           u.face && h('img', { className: 'igmu-face', src: u.face, alt: '' }),
-          h('span', { className: 'igmu-context' }, u.c || 'Suggested for you'))),
+          u.m > 0 && h('b', { className: 'igmu-count' }, `${u.m} mutual${u.m === 1 ? '' : 's'}`),
+          h('span', { className: 'igmu-context' }, `${u.m > 0 ? ' · ' : ''}${u.c || 'Suggested for you'}`))),
       btn);
   }
 
@@ -142,7 +134,6 @@
       // A private account only gets a request.
       u.followed = friendship_status?.following ? 'Following' : 'Requested';
       btn.textContent = u.followed;
-      save();
     } catch (e) {
       console.warn('[igmu] follow failed:', e);
       btn.disabled = false;
@@ -165,26 +156,13 @@
     if (!batch.length) return; // the ask below is answered even before anything arrived
     users.clear();
     for (const [name, u] of batch) users.set(name, u);
-    updated = Date.now();
-    save();
     schedule();
   });
   // Catches the response if it landed before this listener existed.
   document.dispatchEvent(new CustomEvent('igrb-suggested-ask'));
 
-  async function init() {
-    const stored = (await chrome.storage.local.get(KEY))[KEY];
-    // Unless a fresher batch already came in from the page.
-    if (stored?.t > updated) {
-      users.clear();
-      for (const [name, u] of Object.entries(stored.users)) users.set(name, u);
-      updated = stored.t;
-    }
-    // IG is an SPA that re-renders freely, so watch for it and redo; the path checks
-    // in `sort` and `rail` are what keep this off every other page.
-    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
-    schedule();
-  }
-
-  init();
+  // IG is an SPA that re-renders freely, so watch for it and redo; the path checks
+  // in `sort` and `rail` are what keep this off every other page.
+  new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+  schedule();
 })();

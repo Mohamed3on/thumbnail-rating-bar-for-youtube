@@ -133,6 +133,8 @@
   // here: IG's own Discover People request, which the hooked fetch below then
   // hands to collectSuggested like any other.
   document.addEventListener('igrb-suggested-fetch', () => {
+    // A fresh batch, not a running total.
+    for (const name in suggested) delete suggested[name];
     fetch('/api/v1/discover/ayml/', {
       method: 'POST',
       headers: {
