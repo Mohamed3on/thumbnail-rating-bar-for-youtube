@@ -2,8 +2,9 @@
  * Instagram Highest-Liked Cycler
  *
  * Listens for IG's own GraphQL/api responses (piped from page-script.js) and
- * builds a cache of {shortcode → likes/comments}. Press `]` / `[` to scroll
- * between the highest-liked posts currently rendered in the DOM. We filter
+ * builds a cache of {shortcode → likes/comments/liked}. Press `]` / `[` to scroll
+ * between the highest-liked posts currently rendered in the DOM that you haven't
+ * liked yet, or `}` / `{` (Shift) to include the ones you have. We filter
  * through DOM links so cross-profile cache entries and "suggested" posts
  * embedded in GraphQL responses (which have likes but no rendered link) can't
  * pollute the ranking and cause cycling to silently no-op on phantom items.
@@ -71,8 +72,8 @@ function ingestItems(items) {
   for (const item of items) {
     if (!item || typeof item.shortcode !== 'string') continue;
     const prev = cache.get(item.shortcode);
-    if (prev && prev.likes === item.likes && prev.comments === item.comments) continue;
-    cache.set(item.shortcode, { likes: item.likes, comments: item.comments, ts });
+    if (prev && prev.likes === item.likes && prev.comments === item.comments && prev.liked === item.liked) continue;
+    cache.set(item.shortcode, { likes: item.likes, comments: item.comments, liked: item.liked, ts });
     added++;
   }
   if (added) {
@@ -136,21 +137,21 @@ function scheduleCapture() {
 // masquerades as the global #1 and the true top post vanishes the moment it
 // scrolls out of the DOM. Suggested / cross-profile cache entries are excluded
 // for free: they never get a rendered link, so they never enter `offsets`.
-function getRanked() {
+function getRanked(unlikedOnly) {
   // Canonicalize keys to their 11-char shortcode prefix before matching: both the
   // cache and the grid href can carry IG's longer ~40-char `code` instead of the
   // shortcode (the long form shows up in private-profile links). The shortcode is
   // always the prefix, so slice BOTH sides — slicing only the cache (the prior
   // bug) left long-code offsets keys unmatchable and silently emptied the ranking.
-  const likesByShortcode = new Map();
+  const byShortcode = new Map();
   for (const [apiCode, data] of cache) {
     const sc = apiCode.slice(0, 11);
-    if (!likesByShortcode.has(sc)) likesByShortcode.set(sc, data.likes);
+    if (!byShortcode.has(sc)) byShortcode.set(sc, data);
   }
   const out = [];
   for (const [sc, offset] of offsets) {
-    const likes = likesByShortcode.get(sc.slice(0, 11));
-    if (likes != null) out.push({ shortcode: sc, likes, offset });
+    const data = byShortcode.get(sc.slice(0, 11));
+    if (data && !(unlikedOnly && data.liked)) out.push({ shortcode: sc, likes: data.likes, liked: data.liked, offset });
   }
   return out.sort((a, b) => b.likes - a.likes);
 }
@@ -197,20 +198,21 @@ function clearFocus() {
   clearAllFocus();
 }
 
-function setFocus(shortcode, rank, likes) {
+function setFocus(shortcode, rank, likes, liked) {
   clearAllFocus();
   focusedShortcode = shortcode;
   focusedHost = null;
+  // IG's own convention: a filled red heart once you've liked the post, an outline before.
   focusedLabelHTML =
     `<span class="igrb-rank">#${rank}</span>` +
-    `<span class="igrb-likes"><span class="igrb-heart">♥</span>${formatLikes(likes)}</span>`;
+    `<span class="igrb-likes"><span class="igrb-heart${liked ? ' igrb-liked' : ''}">${liked ? '♥' : '♡'}</span>${formatLikes(likes)}</span>`;
   applyFocusToDOM();
   focusObserver.observe(document.body, { childList: true, subtree: true });
 }
 
-function cycleToRank(direction) {
+function cycleToRank(direction, unlikedOnly) {
   captureOffsets();
-  const ranked = getRanked();
+  const ranked = getRanked(unlikedOnly);
   if (!ranked.length) {
     console.log(LOG, 'cycle', direction, '— no ranked items (cache:', cache.size, ')');
     return;
@@ -236,14 +238,15 @@ function cycleToRank(direction) {
   }
   // Set focus even if link not yet in DOM — the observer will apply the class
   // once IG renders it after our scroll lands.
-  setFocus(target.shortcode, idx + 1, target.likes);
+  setFocus(target.shortcode, idx + 1, target.likes, target.liked);
 }
 
+// ] / [ = cycle posts you haven't liked, } / { (Shift+]/[) = cycle all
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-  if (e.key !== ']' && e.key !== '[') return;
+  if (e.key !== ']' && e.key !== '[' && e.key !== '}' && e.key !== '{') return;
   e.preventDefault();
-  cycleToRank(e.key === ']' ? 'forward' : 'backward');
+  cycleToRank(e.key === ']' || e.key === '}' ? 'forward' : 'backward', !e.shiftKey);
 });
 
 drainBuffer();

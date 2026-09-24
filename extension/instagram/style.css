@@ -73,9 +73,12 @@
 }
 
 .igrb-heart {
-  color: var(--igrb-red);
   font-size: 16px;
   line-height: 1;
+}
+
+.igrb-liked {
+  color: var(--igrb-red);
 }
 
 @keyframes igrb-pop {

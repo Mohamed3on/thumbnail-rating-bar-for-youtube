@@ -2,9 +2,10 @@
  * Instagram Network Hook (MAIN world, document_start)
  *
  * Captures IG's own GraphQL / api/v1 responses + the SSR JSON in the initial
- * HTML, extracts {shortcode, likes, comments} tuples, and hands them to the
- * content script via two channels (covers the boot-time race where captures
- * happen before the content script attaches its listener):
+ * HTML, extracts {shortcode, likes, comments, liked} tuples (`liked`: you've
+ * liked the post), and hands them to the content script via two channels
+ * (covers the boot-time race where captures happen before the content script
+ * attaches its listener):
  *   1. Accumulates everything into a `<script id="igrb-data">` JSON buffer
  *      that the content script drains on startup.
  *   2. Dispatches a `CustomEvent` with the new items serialized as a JSON
@@ -57,6 +58,7 @@
           comments: typeof node.comment_count === 'number'
             ? node.comment_count
             : node.edge_media_to_comment?.count ?? 0,
+          liked: node.has_liked === true,
         });
       }
     }
