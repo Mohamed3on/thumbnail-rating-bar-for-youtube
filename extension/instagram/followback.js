@@ -3,7 +3,7 @@
  *
  * Adds a quiet "N not following back" stat beside your own profile's follower
  * counts. Clicking it opens your last results instantly and refreshes them in the
- * background when they're stale: it pages through both follow lists with IG's
+ * background when they're stale: it pages through your follow lists with IG's
  * private API, fetched from inside the page so it rides your logged-in session,
  * and diffs your followers against the previous check to log who unfollowed or
  * followed you. Only people you still follow count as unfollowers: an account
@@ -13,9 +13,10 @@
  *   { t, counts: [followers, following], followers: { pk: { u, n, pic } },
  *     following: { pk: { u, n, pic } }, log: [{ t, type: 'unfollowed' | 'followed', pk, u, n, pic }] }
  * `counts` are IG's own totals at check time, compared against the profile header
- * to refresh when they change. A failed check adds `failed`, its time, until one
- * succeeds. The first check only saves a baseline. Accounts are matched by pk,
- * never username, since usernames change.
+ * to refresh when they change, and a check only pages through followers when their
+ * count moved. A failed check adds `failed`, its time, until one succeeds. The
+ * first check only saves a baseline. Accounts are matched by pk, never username,
+ * since usernames change.
  */
 (() => {
   const cookie = (name) => document.cookie.match(`(?:^|; )${name}=([^;]*)`)?.[1];
@@ -113,10 +114,14 @@
     render();
     try {
       const { user } = await api(`/api/v1/users/${uid}/info/`);
-      const all = user.following_count + user.follower_count;
-      const following = await fetchList('following', 'count=200', user.following_count, 0, all);
-      const followers = await fetchList('followers', 'count=50&search_surface=follow_list_page', user.follower_count, user.following_count, all);
       const prev = (await chrome.storage.local.get(KEY))[KEY];
+      // Followers are most of a check's requests (IG serves ~25 a page), so the saved
+      // ones stand while their count holds. Your own follows and unfollows never move
+      // it; an unfollow and a new follow that cancel out wait for the next change.
+      const same = prev?.counts?.[0] === user.follower_count;
+      const all = user.following_count + (same ? 0 : user.follower_count);
+      const following = await fetchList('following', 'count=200', user.following_count, 0, all);
+      const followers = same ? prev.followers : await fetchList('followers', 'count=50&search_surface=follow_list_page', user.follower_count, user.following_count, all);
       const t = Date.now();
       const log = prev?.log ?? [];
       if (prev) {
@@ -233,7 +238,8 @@
   }
 
   function row(a) {
-    const pic = data.followers[a.pk]?.pic ?? data.following?.[a.pk]?.pic ?? a.pic;
+    // Following is refetched every check, so its picture links are the least likely to have expired.
+    const pic = data.following?.[a.pk]?.pic ?? data.followers[a.pk]?.pic ?? a.pic;
     const avatar = h('span', { className: 'igfb-avatar' },
       pic && h('img', { alt: '', loading: 'lazy', decoding: 'async', onerror() { this.remove(); }, src: pic }));
     avatar.dataset.initial = (a.u.match(/[a-z0-9]/i)?.[0] ?? '').toUpperCase();
