@@ -13,8 +13,9 @@
  *   { t, counts: [followers, following], followers: { pk: { u, n, pic } },
  *     following: { pk: { u, n, pic } }, log: [{ t, type: 'unfollowed' | 'followed', pk, u, n, pic }] }
  * `counts` are IG's own totals at check time, compared against the profile header
- * to refresh when they change. The first check only saves a baseline. Accounts are
- * matched by pk, never username, since usernames change.
+ * to refresh when they change. A failed check adds `failed`, its time, until one
+ * succeeds. The first check only saves a baseline. Accounts are matched by pk,
+ * never username, since usernames change.
  */
 (() => {
   const cookie = (name) => document.cookie.match(`(?:^|; )${name}=([^;]*)`)?.[1];
@@ -50,6 +51,9 @@
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  // After a failed check no tab starts one on its own for an hour: IG's rate
+  // limits outlast a quick retry, and every attempt can extend them.
+  const resting = () => Date.now() - (data?.failed ?? 0) < FRESH_MS;
 
   // Children may be nested arrays or false/null/'' placeholders. IG data only
   // ever goes in as children, which the DOM turns into text nodes.
@@ -124,6 +128,11 @@
       await chrome.storage.local.set({ [KEY]: data });
     } catch (e) {
       error = e.message;
+      // Saved with the snapshot, so other tabs and reloads hold off too.
+      if (data) {
+        data = { ...data, failed: Date.now() };
+        chrome.storage.local.set({ [KEY]: data });
+      }
     } finally {
       progress = null;
       render();
@@ -278,7 +287,7 @@
     document.body.append(panel.root);
     card.focus();
     render();
-    if (Date.now() - Math.max(data?.following ? data.t : 0, attempted) > FRESH_MS) check();
+    if (!resting() && Date.now() - Math.max(data?.following ? data.t : 0, attempted) > FRESH_MS) check();
   }
 
   // Whatever was on screen counts as seen; a check still running reports as new.
@@ -314,7 +323,7 @@
   // Each header value triggers once, and changes made mid-check are picked up after it.
   let reacted = '';
   function watchCounts(counts) {
-    if (!data || progress || counts === reacted) return;
+    if (!data || progress || counts === reacted || resting()) return;
     reacted = counts;
     if (counts !== String(data.counts)) check();
   }
