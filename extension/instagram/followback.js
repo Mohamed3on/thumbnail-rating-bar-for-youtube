@@ -12,8 +12,8 @@
  * One snapshot per account in chrome.storage.local under `igfb:<uid>`:
  *   { t, counts: [followers, following], followers: { pk: { u, n, pic } },
  *     following: { pk: { u, n, pic } }, log: [{ t, type: 'unfollowed' | 'followed', pk, u, n, pic }] }
- * `counts` are IG's own totals at check time, compared against the profile header
- * to refresh when they change, and a check only pages through followers when their
+ * `counts` are the totals your profile header showed at check time, compared against
+ * it to refresh when they change, and a check only pages through followers when their
  * count moved. A failed check adds `failed`, its time, until one succeeds. The
  * first check only saves a baseline. Accounts are matched by pk, never username,
  * since usernames change.
@@ -43,6 +43,7 @@
     `<rect x="67" y="45" width="28" height="10" rx="5" opacity="${i / 8}" transform="rotate(${i * 45 - 90} 50 50)"/>`).join('')}</svg>`;
 
   let data = null; // this account's snapshot
+  let totals = null; // [followers, following] as your profile header shows them
   let seen = 0; // newest check you've had the panel open for; later log entries are "new"
   let attempted = 0; // when the last check started, so a failure isn't retried on every open
   let progress = null; // { text, pct } while a check runs
@@ -113,15 +114,17 @@
     error = null;
     render();
     try {
-      const { user } = await api(`/api/v1/users/${uid}/info/`);
+      // The header's totals, not IG's users/<id>/info: that answers with a bare 429,
+      // and the header costs no request.
+      const [followerCount, followingCount] = totals;
       const prev = (await chrome.storage.local.get(KEY))[KEY];
       // Followers are most of a check's requests (IG serves ~25 a page), so the saved
       // ones stand while their count holds. Your own follows and unfollows never move
       // it; an unfollow and a new follow that cancel out wait for the next change.
-      const same = prev?.counts?.[0] === user.follower_count;
-      const all = user.following_count + (same ? 0 : user.follower_count);
-      const following = await fetchList('following', 'count=200', user.following_count, 0, all);
-      const followers = same ? prev.followers : await fetchList('followers', 'count=50&search_surface=follow_list_page', user.follower_count, user.following_count, all);
+      const same = prev?.counts?.[0] === followerCount;
+      const all = followingCount + (same ? 0 : followerCount);
+      const following = await fetchList('following', 'count=200', followingCount, 0, all);
+      const followers = same ? prev.followers : await fetchList('followers', 'count=50&search_surface=follow_list_page', followerCount, followingCount, all);
       const t = Date.now();
       const log = prev?.log ?? [];
       if (prev) {
@@ -129,7 +132,7 @@
         for (const pk in prev.followers) if (!followers[pk] && following[pk]) log.push({ t, type: 'unfollowed', pk, ...prev.followers[pk] });
         for (const pk in followers) if (!prev.followers[pk]) log.push({ t, type: 'followed', pk, ...followers[pk] });
       }
-      data = { t, counts: [user.follower_count, user.following_count], followers, following, log: log.slice(-LOG_CAP) };
+      data = { t, counts: [followerCount, followingCount], followers, following, log: log.slice(-LOG_CAP) };
       await chrome.storage.local.set({ [KEY]: data });
     } catch (e) {
       error = e.message;
@@ -318,7 +321,8 @@
       while (!row.contains(followers)) row = row.parentElement;
       row.append(chip);
     }
-    watchCounts(`${count(followers)},${count(following)}`);
+    totals = [count(followers), count(following)];
+    watchCounts(String(totals));
   }
 
   // "694 followers", or the exact figure IG keeps in a title once it abbreviates (12.5K).
