@@ -8,6 +8,7 @@
  * and diffs your followers against the previous check to log who unfollowed or
  * followed you. Only people you still follow count as unfollowers: an account
  * that vanished from your following list too deactivated, or you unfollowed it.
+ * Anyone who follows you again drops off the list.
  *
  * One snapshot per account in chrome.storage.local under `igfb:<uid>`:
  *   { t, counts: [followers, following], followers: { pk: { u, n, pic } },
@@ -152,8 +153,9 @@
     const events = (type) => data.log.filter((e) => e.type === type).reverse();
     return {
       notBack: data.following && Object.entries(data.following).filter(([pk]) => !data.followers[pk]).map(([pk, a]) => ({ pk, ...a })),
-      // Anyone you've unfollowed since, or who deactivated, no longer matters.
-      unfollowed: events('unfollowed').filter((e) => data.following?.[e.pk]),
+      // Anyone you've unfollowed since, or who deactivated, no longer matters, and
+      // anyone following you again, say back from deactivating, isn't an unfollower.
+      unfollowed: events('unfollowed').filter((e) => data.following?.[e.pk] && !data.followers[e.pk]),
       followed: events('followed'),
     };
   }
@@ -253,7 +255,6 @@
         (a.n || a.t) && h('span', { className: 'igfb-sub' },
           h('span', { className: 'igfb-name' }, a.n),
           a.t && h('span', { className: 'igfb-time' }, `${a.n ? ' · ' : ''}${short(a.t)}`))),
-      a.type === 'unfollowed' && data.followers[a.pk] && h('span', { className: 'igfb-tag' }, 'Follows you'),
       a.t > seen && h('span', { className: 'igfb-unread', title: 'New' }),
     );
   }

@@ -364,17 +364,6 @@
   white-space: pre;
 }
 
-.igfb-tag {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: rgb(var(--ig-secondary-background));
-  color: rgb(var(--ig-secondary-text));
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 16px;
-}
-
 .igfb-unread {
   flex: none;
   width: 8px;
