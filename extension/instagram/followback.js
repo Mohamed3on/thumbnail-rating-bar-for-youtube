@@ -14,10 +14,9 @@
  *   { t, counts: [followers, following], followers: { pk: { u, n, pic } },
  *     following: { pk: { u, n, pic } }, log: [{ t, type: 'unfollowed' | 'followed', pk, u, n, pic }] }
  * `counts` are the totals your profile header showed at check time, compared against
- * it to refresh when they change, and a check only pages through followers when their
- * count moved. A failed check adds `failed`, its time, until one succeeds. The
- * first check only saves a baseline. Accounts are matched by pk, never username,
- * since usernames change.
+ * it to refresh when they change. A failed check adds `failed`, its time, until one
+ * succeeds. The first check only saves a baseline. Accounts are matched by pk,
+ * never username, since usernames change.
  */
 (() => {
   const cookie = (name) => document.cookie.match(`(?:^|; )${name}=([^;]*)`)?.[1];
@@ -119,13 +118,9 @@
       // and the header costs no request.
       const [followerCount, followingCount] = totals;
       const prev = (await chrome.storage.local.get(KEY))[KEY];
-      // Followers are most of a check's requests (IG serves ~25 a page), so the saved
-      // ones stand while their count holds. Your own follows and unfollows never move
-      // it; an unfollow and a new follow that cancel out wait for the next change.
-      const same = prev?.counts?.[0] === followerCount;
-      const all = followingCount + (same ? 0 : followerCount);
+      const all = followingCount + followerCount;
       const following = await fetchList('following', 'count=200', followingCount, 0, all);
-      const followers = same ? prev.followers : await fetchList('followers', 'count=50&search_surface=follow_list_page', followerCount, followingCount, all);
+      const followers = await fetchList('followers', 'count=50&search_surface=follow_list_page', followerCount, followingCount, all);
       const t = Date.now();
       const log = prev?.log ?? [];
       if (prev) {
@@ -243,7 +238,6 @@
   }
 
   function row(a) {
-    // Following is refetched every check, so its picture links are the least likely to have expired.
     const pic = data.following?.[a.pk]?.pic ?? data.followers[a.pk]?.pic ?? a.pic;
     const avatar = h('span', { className: 'igfb-avatar' },
       pic && h('img', { alt: '', loading: 'lazy', decoding: 'async', onerror() { this.remove(); }, src: pic }));
