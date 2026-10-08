@@ -52,6 +52,13 @@
       "js": ["instagram/content-script.js", "instagram/followback.js", "instagram/mutuals.js"],
       "css": ["instagram/style.css", "instagram/followback.css"],
       "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "*://www.bilibili.com/video/*"
+      ],
+      "js": ["bilibili/resume.js"],
+      "run_at": "document_start"
     }
   ],
   "host_permissions": [
