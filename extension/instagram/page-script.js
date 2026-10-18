@@ -167,7 +167,7 @@
   window.fetch = async function (...args) {
     const res = await origFetch.apply(this, args);
     const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
-    if (url && (url.includes('/graphql/query') || url.includes('/api/v1/'))) {
+    if (url && (url.includes('/graphql') || url.includes('/api/v1/'))) {
       res.clone().text().then(dispatch).catch((e) => {
         console.warn('[igrb] fetch capture failed:', url, e);
       });
@@ -183,7 +183,7 @@
   };
   XMLHttpRequest.prototype.send = function () {
     const url = this.__igrbUrl;
-    if (url && (url.includes('/graphql/query') || url.includes('/api/v1/'))) {
+    if (url && (url.includes('/graphql') || url.includes('/api/v1/'))) {
       this.addEventListener('load', () => {
         try { dispatch(this.responseText); }
         catch (e) { console.warn('[igrb] xhr capture failed:', url, e); }
