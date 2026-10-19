@@ -201,7 +201,8 @@ const IS_YOUTUBE_KIDS_SITE = window.location.href.startsWith('https://www.youtub
 const IS_USING_DARK_THEME =
   getComputedStyle(document.body).getPropertyValue('--yt-spec-general-background-a') === ' #181818';
 
-let processedVideoIds = new Set();
+// In-flight API requests by video ID, shared by every element showing that video
+const pendingVideoData = new Map();
 
 // Score cache: {videoId: {likes, dislikes, ts}}
 const SCORE_CACHE_KEY = 'ytrb_score_cache';
@@ -658,17 +659,14 @@ function processNewThumbnails() {
       delete link.dataset.ytrbVideoId;
     }
 
-    // Skip API call if we've already processed this video ID
-    if (processedVideoIds.has(videoId)) {
-      continue;
-    }
-
     // Skip hidden duplicates — YouTube renders a display:none copy of the watch
     // page sidebar (under #below) alongside the visible one (under #secondary).
     // Checked here (after cheap dedup guards) because offsetParent forces layout.
     if (link.offsetParent === null) continue;
 
-    processedVideoIds.add(videoId);
+    // Claim the element, not the video ID: re-sorting a playlist rebuilds the
+    // list on the same URL, so already-scored videos come back in new elements.
+    link.dataset.ytrbVideoId = videoId;
 
     const cached = scoreCache[videoId];
     if (cached && Date.now() - cached.ts < (userSettings.cacheDuration || DEFAULT_USER_SETTINGS.cacheDuration)) {
@@ -687,9 +685,18 @@ function processNewThumbnails() {
       continue;
     }
 
-    // Get video data from API
-    getVideoDataFromApi(videoId)
+    // Get video data from API, reusing a request already in flight
+    if (!pendingVideoData.has(videoId)) {
+      pendingVideoData.set(
+        videoId,
+        getVideoDataFromApi(videoId).finally(() => pendingVideoData.delete(videoId))
+      );
+    }
+    pendingVideoData
+      .get(videoId)
       .then((videoData) => {
+        // YouTube may have reused the element for another video meanwhile
+        if (link.dataset.ytrbVideoId !== videoId) return;
         if (videoData) {
           if (userSettings.barHeight !== 0) {
             addRatingBar(link, videoData, videoId);
@@ -712,7 +719,7 @@ function processNewThumbnails() {
         }
       })
       .catch(() => {
-        processedVideoIds.delete(videoId);
+        if (link.dataset.ytrbVideoId === videoId) delete link.dataset.ytrbVideoId;
       });
   }
 }
@@ -824,7 +831,6 @@ function handleDomMutations() {
       currentUnwatchedElement = null;
       document.querySelectorAll('.ytrb-current-focus').forEach((el) => el.classList.remove('ytrb-current-focus'));
       document.querySelectorAll('.ytrb-rank-badge').forEach((el) => el.remove());
-      processedVideoIds.clear();
       addedFindBestThumbnailButton = false;
     }
 
