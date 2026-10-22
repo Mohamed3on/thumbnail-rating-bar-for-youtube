@@ -87,7 +87,7 @@
   function dispatch(text) {
     if (!text || text.length < 50) return;
     const likes = text.includes('like_count') || text.includes('edge_liked_by') || text.includes('edge_media_preview_like');
-    const suggestions = text.includes('suggested_users');
+    const suggestions = text.includes('suggested_users') || text.includes('"ayml"');
     if (!likes && !suggestions) return;
     let json;
     try { json = JSON.parse(text); }
@@ -99,7 +99,8 @@
     emit(items);
   }
 
-  // /explore/people/ arrives as a single response holding every suggestion, each
+  // /explore/people/ arrives as a single GraphQL response holding every suggestion
+  // (the home rail's v1 request nests the same items differently), each
   // carrying the "Followed by marcusolivix and 12 more" line its row renders. That
   // sentence is the only count IG gives — nothing in the payload is a number — and
   // it comes two ways ("and 12 more", "+ 45 more"), so both are read here. The
@@ -111,7 +112,7 @@
   const scale = (s) => parseFloat(s.replace(/,/g, '')) * (/K$/i.test(s) ? 1e3 : /M$/i.test(s) ? 1e6 : 1);
 
   function collectSuggested(json) {
-    const list = json?.suggested_users?.suggestions;
+    const list = json?.suggested_users?.suggestions ?? json?.data?.ayml?.groups?.flatMap((g) => g.items);
     if (!Array.isArray(list)) return;
     for (const item of list) {
       const user = item?.user;
