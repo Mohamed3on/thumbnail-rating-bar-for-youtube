@@ -13,8 +13,9 @@ let mutationTimeout;
 let highestScoreTimeout;
 
 // Element tags, not classes: YouTube renames the overlay CSS classes often.
+// Search results also carry a hidden, 0% resume overlay on unwatched videos.
 const WATCHED_THUMBNAIL_SELECTOR =
-  'ytw-thumbnail-overlay-resume-playback-renderer, yt-thumbnail-overlay-progress-bar-view-model';
+  'ytw-thumbnail-overlay-resume-playback-renderer:not([style*="display: none"]), yt-thumbnail-overlay-progress-bar-view-model';
 
 const LOCKUP_CONTAINER_SELECTOR =
   'yt-lockup-view-model, ytd-rich-item-renderer, ytd-video-renderer';
@@ -262,7 +263,7 @@ const deferWatchedCheck = (targetContainer, scoreEl) => {
       scheduleHighestScoreUpdate();
     }
   });
-  observer.observe(container, { childList: true, subtree: true });
+  observer.observe(container, { childList: true, subtree: true, attributeFilter: ['style'] });
   // Stop watching after 10s to avoid leaks
   setTimeout(() => observer.disconnect(), 10000);
 };
