@@ -20,7 +20,8 @@ const WATCHED_THUMBNAIL_SELECTOR =
 const LOCKUP_CONTAINER_SELECTOR =
   'yt-lockup-view-model, ytd-rich-item-renderer, ytd-video-renderer';
 
-const LOCKUP_TITLE_SELECTOR = '#video-title, .ytLockupMetadataViewModelTitle span';
+const LOCKUP_TITLE_SELECTOR =
+  '#video-title, .ytLockupMetadataViewModelTitle span, .shortsLockupViewModelHostMetadataTitle';
 
 // Track current element in ranked video list for cycling (all videos vs unwatched only)
 let currentRankedElement = null;
@@ -60,7 +61,7 @@ const scrollToRankedVideo = (direction, { unwatchedOnly = false } = {}) => {
 
   const target = ranked[idx];
   const thumbnail = target.closest(
-    'yt-thumbnail-view-model, a#thumbnail, a.ytLockupViewModelContentImage'
+    'yt-thumbnail-view-model, a#thumbnail, a.ytLockupViewModelContentImage, .shortsLockupViewModelHost'
   );
 
   // Remove previous highlight and badge
@@ -76,8 +77,8 @@ const scrollToRankedVideo = (direction, { unwatchedOnly = false } = {}) => {
     badge.textContent = `#${idx + 1}`;
 
     // Place badge on the title text
-    const container = thumbnail.closest(LOCKUP_CONTAINER_SELECTOR);
-    const title = container?.querySelector(LOCKUP_TITLE_SELECTOR);
+    const container = thumbnail.closest(LOCKUP_CONTAINER_SELECTOR) ?? thumbnail;
+    const title = container.querySelector(LOCKUP_TITLE_SELECTOR);
     if (title) {
       title.appendChild(badge);
     } else {
@@ -239,7 +240,8 @@ const THUMBNAIL_SELECTOR = [
   'a#thumbnail[href*="/shorts/"]',
   'a.ytLockupViewModelContentImage[href*="/watch?v="]',
   'a.ytLockupViewModelContentImage[href*="/live/"]',
-  'a.shortsLockupViewModelHostEndpoint[href*="/shorts/"]',
+  // Shorts lockups repeat the endpoint on the title; score only the thumbnail one
+  'a.shortsLockupViewModelHostEndpoint:not(.shortsLockupViewModelHostOutsideMetadataEndpoint)[href*="/shorts/"]',
   'a.ytp-videowall-still[href]',
 ].join(',');
 
